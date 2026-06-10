@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mussels to Muscles · DB4 Monitor</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div class="brand-block">
+        <img class="logo" src="assets/mussels_to_muscles.png" alt="Mussels to Muscles project logo" />
+
+        <div>
+          <p class="eyebrow">DTU DB4</p>
+          <h1>Mussels to Muscles</h1>
+          <p class="subtitle">
+            Live monitoring dashboard for the autonomous mussel-system prototype.
+          </p>
+        </div>
+      </div>
+
+      <div class="status-card">
+        <span id="connection-dot" class="dot dot-idle"></span>
+        <span id="connection-status">Not connected</span>
+      </div>
+    </header>
+
+    <section class="panel settings-panel">
+      <h2>Feed settings</h2>
+
+      <form id="settings-form" class="settings-grid">
+        <label>
+          Adafruit IO username
+          <input id="username" name="username" type="text" placeholder="your_username" required />
+        </label>
+
+        <label>
+          Feed key
+          <input id="feed-key" name="feedKey" type="text" placeholder="temperature" required />
+        </label>
+
+        <label>
+          AIO key
+          <input id="aio-key" name="aioKey" type="password" placeholder="aio_..." autocomplete="off" />
+          <span class="hint">Do NOT commit this key to GitHub. It is stored only in this browser if you save it locally.</span>
+        </label>
+
+        <label>
+          Number of points
+          <input id="limit" name="limit" type="number" min="1" max="1000" value="100" />
+        </label>
+
+        <label>
+          Refresh interval, seconds
+          <input id="refresh-seconds" name="refreshSeconds" type="number" min="5" max="600" value="15" />
+        </label>
+
+        <div class="button-row">
+          <button type="submit">Connect</button>
+          <button type="button" id="save-settings" class="secondary">Save locally</button>
+          <button type="button" id="clear-settings" class="ghost">Clear</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="cards">
+      <article class="metric-card current">
+        <p class="metric-label">Current temperature</p>
+        <p id="current-value" class="metric-value">--</p>
+        <p id="current-time" class="metric-detail">Waiting for data</p>
+      </article>
+
+      <article class="metric-card">
+        <p class="metric-label">Minimum</p>
+        <p id="min-value" class="metric-value small">--</p>
+        <p class="metric-detail">within loaded feed data</p>
+      </article>
+
+      <article class="metric-card">
+        <p class="metric-label">Maximum</p>
+        <p id="max-value" class="metric-value small">--</p>
+        <p class="metric-detail">within loaded feed data</p>
+      </article>
+
+      <article class="metric-card">
+        <p class="metric-label">Average</p>
+        <p id="avg-value" class="metric-value small">--</p>
+        <p class="metric-detail">within loaded feed data</p>
+      </article>
+    </section>
+
+    <section class="panel chart-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Temperature trend</h2>
+          <p id="chart-description">Recent feed values, oldest to newest.</p>
+        </div>
+        <button id="refresh-now" class="secondary">Refresh now</button>
+      </div>
+
+      <div class="chart-wrap">
+        <canvas id="temperature-chart" width="1200" height="480"></canvas>
+      </div>
+    </section>
+
+    <section class="panel table-panel">
+      <h2>Latest data points</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody id="data-table-body">
+            <tr><td colspan="2">No data loaded yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
