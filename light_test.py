@@ -1,7 +1,7 @@
 # main.py — TCS34725 test
 from machine import I2C, Pin
 import time
-from tcs34725 import TCS34725
+from adafruit.tcs34725 import TCS34725
 
 # Adjust pins to your wiring. ESP32 common default: SCL=22, SDA=21.
 i2c = I2C(0, scl=Pin(22), sda=Pin(21), freq=100000)

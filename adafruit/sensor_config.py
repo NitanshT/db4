@@ -1,0 +1,33 @@
+# TIMING
+
+SAMPLE_INTERVAL = 2       # seconds between measurements
+PUBLISH_INTERVAL = 30     # seconds between Adafruit IO publishes
+
+# I2C LIGHT SENSOR
+
+I2C_BUS = 0
+I2C_SCL_PIN = 22
+I2C_SDA_PIN = 21
+I2C_FREQ = 100000
+
+LIGHT_INTEGRATION_TIME = 100
+LIGHT_GAIN = 4
+
+# THERMISTORS
+
+THERMISTOR_1_PIN = 36
+THERMISTOR_2_PIN = 39
+
+# ADC1 pins are required because ESP32 ADC2 conflicts with WiFi.
+
+# ADAFRUIT IO FEEDS
+
+FEED_LIGHT = "light"
+FEED_TEMPERATURE_1 = "temperature1"
+FEED_TEMPERATURE_2 = "temperature2"
+
+FEEDS = (
+    FEED_LIGHT,
+    FEED_TEMPERATURE_1,
+    FEED_TEMPERATURE_2,
+)
