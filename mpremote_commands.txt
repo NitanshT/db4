@@ -1,0 +1,6 @@
+mpremote connect /dev/tty.usbserial-1130 cp file.py : — copy file to device flash. Persistent; survives reboot.
+mpremote connect /dev/tty.usbserial-1130 ls — list device files.
+mpremote connect /dev/tty.usbserial-1130 run file.py — run a local file directly from your laptop without copying it to flash. This is the key development command: edit locally, run, see output, repeat. Nothing auto-runs on next boot because nothing was written.
+mpremote connect /dev/tty.usbserial-1130 repl — interactive REPL (Ctrl-] to exit). Use this for ad-hoc poking like i2c.scan().
+mpremote connect /dev/tty.usbserial-1130 reset — soft reset, triggers the boot.py → main.py sequence.
+mpremote connect /dev/tty.usbserial-1130 rm :main.py — delete a device file.
