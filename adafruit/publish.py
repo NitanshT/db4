@@ -2,7 +2,7 @@ import network, time, math
 from machine import Pin, ADC, I2C
 from umqtt.simple import MQTTClient
 from config import WIFI_SSID, WIFI_PASS, AIO_USER, AIO_KEY
-from adafruit.tcs34725 import TCS34725
+from tcs34725 import TCS34725
 import sensor_config as cfg
 
 # ---------------------------------------------------------------------------
