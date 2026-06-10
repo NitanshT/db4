@@ -1,4 +1,4 @@
-# Mussels to Muscles — DB4 Project
+# **Mussels to Muscles** - 22400 Design-build 4: Autonomous devices for controlling and studying living systems
 
 This repository contains the code for the **Mussels to Muscles** DB4 project: an autonomous monitoring system for studying a living mussel system using ESP32-based sensing and an Adafruit IO web interface.
 
