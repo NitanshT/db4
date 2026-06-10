@@ -1,16 +1,20 @@
-# Mussels to Muscles · Adafruit IO Frontend
+# Mussels to Muscles Adafruit IO Frontend
 
-Static GitHub Pages dashboard for reading ESP32 temperature values from an Adafruit IO feed.
+Static GitHub Pages frontend for the ESP32 Adafruit IO feeds.
 
-## Files
+## Default feeds
+
+The UI defaults match the current ESP32 publisher:
 
 ```text
-index.html
-styles.css
-app.js
-assets/mussels_to_muscles.png
+temperature1
+temperature2
+light
 ```
+
+Leave any feed field empty to hide it.
 
 ## Security
 
-PLEASE do NOT hard-code your Adafruit IO key into frontend code. Enter it in the browser form instead, or use a backend/proxy if the site will be public.
+PLEASE do NOT hard-code your Adafruit IO key into `app.js` or `index.html`.
+The browser form uses the key at runtime and can store it in localStorage only on that machine.

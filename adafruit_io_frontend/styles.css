@@ -8,17 +8,15 @@
   --muscle-tan: #C48C61;
   --bronze-shadow: #8B5D42;
   --data-cyan: #38BDF8;
+  --light-gold: #FBBF24;
   --success: #34D399;
-  --warning: #FBBF24;
   --danger: #FB7185;
   --text: #F4F0EA;
   --muted: #B9C2D0;
   --border: rgba(185, 194, 208, 0.20);
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
@@ -56,12 +54,6 @@ body {
   height: clamp(112px, 18vw, 210px);
   object-fit: contain;
   filter: drop-shadow(0 22px 30px rgba(0, 0, 0, 0.42));
-  animation: logoFloat 5s ease-in-out infinite;
-}
-
-@keyframes logoFloat {
-  0%, 100% { transform: translateY(0) rotate(-2deg); }
-  50% { transform: translateY(-6px) rotate(1deg); }
 }
 
 .eyebrow {
@@ -78,27 +70,41 @@ h1 {
   margin: 0 0 12px;
   letter-spacing: -0.07em;
   color: var(--text);
-  text-shadow:
-    0 10px 28px rgba(0, 0, 0, 0.35),
-    0 0 34px rgba(56, 189, 248, 0.10);
+  text-shadow: 0 10px 28px rgba(0, 0, 0, 0.35), 0 0 34px rgba(56, 189, 248, 0.10);
 }
 
 h2 {
-  margin: 0 0 16px;
+  margin: 0;
   font-size: 1.2rem;
-  color: var(--text);
+}
+
+code {
+  color: var(--data-cyan);
+  background: rgba(56, 189, 248, 0.10);
+  border: 1px solid rgba(56, 189, 248, 0.14);
+  border-radius: 7px;
+  padding: 1px 5px;
+}
+
+.subtitle,
+.section-title p,
+.metric-detail,
+.metric-label,
+.hint {
+  color: var(--muted);
 }
 
 .subtitle {
-  color: var(--muted);
   margin: 0;
-  max-width: 720px;
+  max-width: 760px;
   font-size: 1.05rem;
 }
 
 .status-card,
 .panel,
-.metric-card {
+.metric-card,
+.sensor-card,
+.chart-card {
   background: linear-gradient(180deg, rgba(16, 28, 51, 0.90), rgba(9, 18, 36, 0.90));
   border: 1px solid var(--border);
   border-radius: 22px;
@@ -122,18 +128,27 @@ h2 {
   display: inline-block;
 }
 
-.dot-idle { background: var(--warning); }
+.dot-idle { background: var(--light-gold); }
 .dot-ok { background: var(--success); }
 .dot-error { background: var(--danger); }
 
-.panel {
-  padding: 22px;
-  margin-bottom: 20px;
+.panel,
+.metric-card,
+.sensor-card,
+.chart-card {
   position: relative;
   overflow: hidden;
 }
 
-.panel::before {
+.panel {
+  padding: 22px;
+  margin-bottom: 20px;
+}
+
+.panel::before,
+.metric-card::before,
+.sensor-card::before,
+.chart-card::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -143,24 +158,23 @@ h2 {
   pointer-events: none;
 }
 
-.panel > * {
+.panel > *,
+.metric-card > *,
+.sensor-card > *,
+.chart-card > * {
   position: relative;
 }
 
-.panel-header {
+.section-title {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
+  margin-bottom: 16px;
 }
 
-.panel-header.compact {
-  margin-bottom: 12px;
-}
-
-.panel-header p {
-  color: var(--muted);
-  margin: -8px 0 0;
+.section-title p {
+  margin: 6px 0 0;
 }
 
 .settings-grid {
@@ -192,7 +206,6 @@ input:focus {
 }
 
 .hint {
-  color: var(--muted);
   font-size: 0.78rem;
   line-height: 1.35;
 }
@@ -226,60 +239,78 @@ button.ghost {
   border: 1px solid var(--border);
 }
 
-button:hover {
-  filter: brightness(1.08);
-}
+button:hover { filter: brightness(1.08); }
 
-.cards {
+.summary-grid,
+.sensor-grid,
+.chart-grid {
   display: grid;
-  grid-template-columns: 1.25fr repeat(3, 1fr);
   gap: 16px;
   margin-bottom: 20px;
 }
 
-.metric-card {
+.summary-grid { grid-template-columns: 0.7fr 1.4fr 0.9fr; }
+.sensor-grid { grid-template-columns: repeat(3, minmax(220px, 1fr)); }
+.chart-grid { grid-template-columns: 1fr; }
+
+.metric-card,
+.sensor-card,
+.chart-card {
   padding: 20px;
-  position: relative;
-  overflow: hidden;
 }
 
-.metric-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at top right, rgba(111, 125, 149, 0.20), transparent 16rem);
-  pointer-events: none;
-}
-
-.metric-card.current::before {
+.sensor-card.temperature::before {
   background:
     radial-gradient(circle at top right, rgba(196, 140, 97, 0.28), transparent 17rem),
     linear-gradient(135deg, rgba(56, 189, 248, 0.10), transparent 45%);
 }
 
-.metric-label,
-.metric-detail {
-  margin: 0;
-  color: var(--muted);
-  position: relative;
+.sensor-card.light::before {
+  background:
+    radial-gradient(circle at top right, rgba(251, 191, 36, 0.22), transparent 17rem),
+    linear-gradient(135deg, rgba(111, 125, 149, 0.16), transparent 45%);
 }
 
-.metric-value {
+.metric-label,
+.metric-detail { margin: 0; }
+
+.metric-value,
+.sensor-value {
   margin: 10px 0 8px;
-  font-size: 2.8rem;
+  font-size: 2.55rem;
   font-weight: 850;
   letter-spacing: -0.06em;
   color: var(--text);
-  position: relative;
 }
 
-.current .metric-value {
-  color: var(--muscle-tan);
+.metric-value.small { font-size: 2rem; }
+.metric-value.compact { font-size: 1.45rem; letter-spacing: -0.04em; }
+
+.sensor-card.temperature .sensor-value { color: var(--muscle-tan); }
+.sensor-card.light .sensor-value { color: var(--light-gold); }
+
+.sensor-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 16px;
 }
 
-.metric-value.small {
-  font-size: 2rem;
+.sensor-stat {
+  border: 1px solid var(--border);
+  background: rgba(22, 42, 71, 0.60);
+  border-radius: 14px;
+  padding: 10px;
 }
+
+.sensor-stat span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.76rem;
+  margin-bottom: 4px;
+}
+
+.sensor-stat strong { font-size: 0.95rem; }
 
 .chart-wrap {
   width: 100%;
@@ -296,9 +327,7 @@ canvas {
   border: 1px solid var(--border);
 }
 
-.table-wrap {
-  overflow-x: auto;
-}
+.table-wrap { overflow-x: auto; }
 
 table {
   border-collapse: collapse;
@@ -317,30 +346,40 @@ th {
   font-weight: 800;
 }
 
-td {
-  color: var(--text);
+td { color: var(--text); }
+
+.feed-pill {
+  display: inline-flex;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.12);
+  color: var(--data-cyan);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  font-size: 0.82rem;
 }
 
-@media (max-width: 1040px) {
-  .cards {
-    grid-template-columns: repeat(2, 1fr);
+.error-text { color: var(--danger); }
+
+@media (max-width: 880px) {
+  .summary-grid,
+  .sensor-grid {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 760px) {
   .hero,
-  .panel-header,
+  .section-title,
   .brand-block {
     flex-direction: column;
   }
 
-  .settings-grid,
-  .cards {
-    grid-template-columns: 1fr;
-  }
+  .settings-grid { grid-template-columns: 1fr; }
 
   .logo {
     width: 150px;
     height: 150px;
   }
+
+  .sensor-stats { grid-template-columns: 1fr; }
 }
