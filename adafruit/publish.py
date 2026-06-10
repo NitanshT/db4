@@ -3,26 +3,7 @@ from machine import Pin, ADC, I2C
 from umqtt.simple import MQTTClient
 from config import WIFI_SSID, WIFI_PASS, AIO_USER, AIO_KEY
 from adafruit.tcs34725 import TCS34725
-
-# ---------------------------------------------------------------------------
-# TIMING
-# ---------------------------------------------------------------------------
-SAMPLE_INTERVAL  = 2     # seconds between individual measurements
-PUBLISH_INTERVAL = 30    # seconds between publishes (see rate-limit note below)
-
-# ---------------------------------------------------------------------------
-# THERMISTOR CONSTANTS  --  YOU MUST SET THESE TO MATCH YOUR CIRCUIT
-# These are placeholders. I cannot know your hardware. Wrong values =
-# plausible-but-wrong temperatures, which is worse than a crash.
-# ---------------------------------------------------------------------------
-R_FIXED = 10000.0        # the fixed resistor in your divider, ohms
-R0      = 10000.0        # thermistor nominal resistance at 25 C, ohms
-BETA    = 3950.0         # thermistor beta coefficient (from datasheet)
-T0      = 298.15         # 25 C expressed in kelvin
-# Divider orientation. True  = 3V3 -- R_FIXED -- [ADC node] -- thermistor -- GND
-#                      False = 3V3 -- thermistor -- [ADC node] -- R_FIXED -- GND
-THERMISTOR_ON_LOW_SIDE = True
-ADC_FULL = 65535.0       # read_u16() full-scale
+import sensor_config as cfg
 
 # ---------------------------------------------------------------------------
 # WIFI
@@ -45,15 +26,24 @@ def wifi_connect():
 # ---------------------------------------------------------------------------
 # HARDWARE INIT
 # ---------------------------------------------------------------------------
-i2c = I2C(0, scl=Pin(22), sda=Pin(21), freq=100000)   # set pins to your wiring
+i2c = I2C(
+    cfg.I2C_BUS,
+    scl=Pin(cfg.I2C_SCL_PIN),
+    sda=Pin(cfg.I2C_SDA_PIN),
+    freq=cfg.I2C_FREQ,
+)
+
 light = TCS34725(i2c)
-light.integration_time(100)   # ms
-light.gain(4)                 # 1, 4, 16, 60
+light.integration_time(cfg.LIGHT_INTEGRATION_TIME)
+light.gain(cfg.LIGHT_GAIN)
 
 # GPIO 36 and 39 are ADC1 channels. Required: ADC2 cannot be read while WiFi
 # is active, so ADC1 is the only correct choice here.
-t1 = ADC(Pin(36)); t1.atten(ADC.ATTN_11DB)   # ~0-3.3V range
-t2 = ADC(Pin(39)); t2.atten(ADC.ATTN_11DB)
+t1 = ADC(Pin(cfg.THERMISTOR_1_PIN))
+t1.atten(ADC.ATTN_11DB)
+
+t2 = ADC(Pin(cfg.THERMISTOR_2_PIN))
+t2.atten(ADC.ATTN_11DB)
 
 # ---------------------------------------------------------------------------
 # READ FUNCTIONS
@@ -70,12 +60,14 @@ def adc_to_celsius(raw):
     # Guard against a railed reading (disconnected probe / short).
     if raw < 100 or raw > 65435:
         return None
-    frac = raw / ADC_FULL
-    if THERMISTOR_ON_LOW_SIDE:
-        rth = R_FIXED * frac / (1.0 - frac)
+    frac = raw / cfg.ADC_FULL
+
+    if cfg.THERMISTOR_ON_LOW_SIDE:
+        rth = cfg.R_FIXED * frac / (1.0 - frac)
     else:
-        rth = R_FIXED * (1.0 - frac) / frac
-    inv_t = 1.0 / T0 + (1.0 / BETA) * math.log(rth / R0)
+        rth = cfg.R_FIXED * (1.0 - frac) / frac
+
+    inv_t = 1.0 / cfg.T0 + (1.0 / cfg.BETA) * math.log(rth / cfg.R0)
     return 1.0 / inv_t - 273.15
 
 # ---------------------------------------------------------------------------
@@ -84,7 +76,7 @@ def adc_to_celsius(raw):
 def main():
     wifi_connect()
     client = MQTTClient(
-        client_id="esp32-bioreactor-poc",
+        client_id=cfg.MQTT_CLIENT_ID,
         server="io.adafruit.com",
         port=1883,
         user=AIO_USER,
@@ -94,7 +86,7 @@ def main():
     client.connect()
     base = AIO_USER + "/feeds/"
 
-    feeds = ("light", "temperature1", "temperature2")
+    feeds = cfg.FEEDS
     sums   = {f: 0.0 for f in feeds}
     counts = {f: 0   for f in feeds}
     last_pub = time.time()
@@ -107,15 +99,15 @@ def main():
     while True:
         # ---- sample ----
         try:
-            accumulate("light", read_lux())
+            accumulate(cfg.FEED_LIGHT, read_lux())
         except Exception as e:
             print("light read err:", e)
 
-        accumulate("temperature1", adc_to_celsius(t1.read_u16()))
-        accumulate("temperature2", adc_to_celsius(t2.read_u16()))
+        accumulate(cfg.FEED_TEMPERATURE_1, adc_to_celsius(t1.read_u16()))
+        accumulate(cfg.FEED_TEMPERATURE_2, adc_to_celsius(t2.read_u16()))
 
         # ---- publish on interval ----
-        if time.time() - last_pub >= PUBLISH_INTERVAL:
+        if time.time() - last_pub >= cfg.PUBLISH_INTERVAL:
             for feed in feeds:
                 if counts[feed] == 0:
                     continue
@@ -137,6 +129,6 @@ def main():
                 counts[feed] = 0
             last_pub = time.time()
 
-        time.sleep(SAMPLE_INTERVAL)
+        time.sleep(cfg.SAMPLE_INTERVAL)
 
 main()
