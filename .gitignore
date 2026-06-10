@@ -1,0 +1,13 @@
+# Secrets / local config
+config.py
+adafruit/config.py
+
+# Python cache
+__pycache__/
+*.pyc
+
+# VS Code local settings
+.vscode/
+
+# MicroPython / build artifacts
+*.mpy
