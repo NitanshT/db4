@@ -1,4 +1,5 @@
 # Central hardware and timing configuration for the ESP32 sensor system.
+#"Scientists investigate that which alrady is; engineers create that which has never been" - Albert Einstein
 
 # ---------------------------------------------------------------------------
 # TIMING
