@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------
 
 SAMPLE_INTERVAL = 2       # seconds between individual measurements
-PUBLISH_INTERVAL = 30     # seconds between Adafruit IO publishes
+PUBLISH_INTERVAL = 3     # seconds between Adafruit IO publishes
 
 # ---------------------------------------------------------------------------
 # ADAFRUIT IO
