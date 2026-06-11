@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mussels to Muscles · Sensor Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div class="brand-block">
+        <img class="logo" src="assets/mussels_to_muscles.png" alt="Mussels to Muscles logo" />
+        <div>
+          <p class="eyebrow">DTU DB4</p>
+          <h1>Mussels to Muscles</h1>
+          <p class="subtitle">
+            Live web dashboard for thermistor and light-sensor data from the autonomous mussel-system prototype.
+          </p>
+        </div>
+      </div>
+
+      <div class="status-card">
+        <span id="connection-dot" class="dot dot-idle"></span>
+        <span id="connection-status">Not connected</span>
+      </div>
+    </header>
+
+    <section class="panel settings-panel">
+      <div class="section-title">
+        <div>
+          <h2>Adafruit IO feed settings</h2>
+          <p>
+            These defaults match the ESP32 publisher: <code>temperature1</code>, <code>temperature2</code>, and <code>light</code>.
+            Leave a feed empty to hide it.
+          </p>
+        </div>
+      </div>
+
+      <form id="settings-form" class="settings-grid">
+        <label>
+          Adafruit IO username
+          <input id="username" type="text" placeholder="your_username" required />
+        </label>
+
+        <label>
+          AIO key
+          <input id="aio-key" type="password" placeholder="aio_..." autocomplete="off" />
+          <span class="hint">Do not commit this key. It is only used in the browser request.</span>
+        </label>
+
+        <label>
+          Temperature 1 feed
+          <input id="temperature1-feed" type="text" value="temperature1" />
+        </label>
+
+        <label>
+          Temperature 2 feed
+          <input id="temperature2-feed" type="text" value="temperature2" />
+        </label>
+
+        <label>
+          Light feed
+          <input id="light-feed" type="text" value="light" />
+        </label>
+
+        <label>
+          Number of points
+          <input id="limit" type="number" min="1" max="1000" value="120" />
+        </label>
+
+        <label>
+          Refresh interval, seconds
+          <input id="refresh-seconds" type="number" min="5" max="600" value="15" />
+        </label>
+
+        <div class="button-row">
+          <button type="submit">Connect</button>
+          <button type="button" id="refresh-now" class="secondary">Refresh now</button>
+          <button type="button" id="save-settings" class="secondary">Save locally</button>
+          <button type="button" id="clear-settings" class="ghost">Clear</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="summary-grid">
+      <article class="metric-card">
+        <p class="metric-label">Active feeds</p>
+        <p id="active-feed-count" class="metric-value small">0</p>
+        <p class="metric-detail">Currently configured</p>
+      </article>
+
+      <article class="metric-card">
+        <p class="metric-label">Latest update</p>
+        <p id="latest-update" class="metric-value compact">--</p>
+        <p class="metric-detail">Across all loaded feeds</p>
+      </article>
+
+      <article class="metric-card">
+        <p class="metric-label">Data points loaded</p>
+        <p id="total-points" class="metric-value small">0</p>
+        <p class="metric-detail">Numeric values only</p>
+      </article>
+    </section>
+
+    <section class="sensor-grid" id="sensor-cards"></section>
+    <section class="chart-grid" id="sensor-charts"></section>
+
+    <section class="panel table-panel">
+      <div class="section-title">
+        <div>
+          <h2>Latest combined readings</h2>
+          <p>Newest values from all configured feeds.</p>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Sensor</th>
+              <th>Time</th>
+              <th>Value</th>
+              <th>Feed</th>
+            </tr>
+          </thead>
+          <tbody id="data-table-body">
+            <tr><td colspan="4">No data loaded yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
