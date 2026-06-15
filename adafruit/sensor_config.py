@@ -1,12 +1,13 @@
 # Central hardware and timing configuration for the ESP32 sensor system.
-#"Scientists investigate that which alrady is; engineers create that which has never been" - Albert Einstein
+#"Scientists investigate that which alrady is; 
+# engineers create that which has never been" - Albert Einstein
 
 # ---------------------------------------------------------------------------
 # TIMING
 # ---------------------------------------------------------------------------
 
 SAMPLE_INTERVAL = 2       # seconds between individual measurements
-PUBLISH_INTERVAL = 30     # seconds between Adafruit IO publishes
+PUBLISH_INTERVAL = 3     # seconds between Adafruit IO publishes
 
 # ---------------------------------------------------------------------------
 # ADAFRUIT IO
