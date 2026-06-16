@@ -77,7 +77,7 @@ function getSettingsFromForm() {
     username: elements.username.value.trim(),
     aioKey: elements.aioKey.value.trim(),
     limit: clampNumber(Number(elements.limit.value), 1, 1000, 120),
-    refreshSeconds: clampNumber(Number(elements.refreshSeconds.value), 5, 600, 15),
+    refreshSeconds: clampNumber(Number(elements.refreshSeconds.value), 1, 600, 15),
   };
 
   for (const sensor of SENSOR_DEFINITIONS) {
