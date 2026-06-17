@@ -31,8 +31,8 @@
         <div>
           <h2>Adafruit IO feed settings</h2>
           <p>
-            These defaults match the ESP32 publisher: <code>temperature1</code>, <code>temperature2</code>, and <code>light</code>.
-            Leave a feed empty to hide it.
+            These defaults match the ESP32 publisher and remote-control feeds.
+            Leave a sensor feed empty to hide it from the charts.
           </p>
         </div>
       </div>
@@ -65,6 +65,31 @@
         </label>
 
         <label>
+          OD water feed
+          <input id="od-water-feed" type="text" value="od-water" />
+        </label>
+
+        <label>
+          Active setpoint feed
+          <input id="setpoint-active-feed" type="text" value="setpoint-active" />
+        </label>
+
+        <label>
+          Relay state feed
+          <input id="relay-state-feed" type="text" value="relay-state" />
+        </label>
+
+        <label>
+          Test number feed
+          <input id="test-number-active-feed" type="text" value="test-number-active" />
+        </label>
+
+        <label>
+          Elapsed test time feed
+          <input id="elapsed-test-s-feed" type="text" value="elapsed-test-s" />
+        </label>
+
+        <label>
           Number of points
           <input id="limit" type="number" min="1" max="1000" value="120" />
         </label>
@@ -81,6 +106,71 @@
           <button type="button" id="clear-settings" class="ghost">Clear</button>
         </div>
       </form>
+    </section>
+
+    <section class="panel control-panel">
+      <div class="section-title">
+        <div>
+          <h2>Remote controls</h2>
+          <p>
+            These controls write to Adafruit IO feeds. The ESP32 subscribes to these feeds and updates the relay/Peltier logic remotely.
+          </p>
+        </div>
+      </div>
+
+      <div class="control-feed-grid">
+        <span class="feed-pill">setpoint-temp</span>
+        <span class="feed-pill">peltier-enable</span>
+        <span class="feed-pill">auto-control</span>
+        <span class="feed-pill">manual-peltier</span>
+        <span class="feed-pill">test-number</span>
+        <span class="feed-pill">test-duration-s</span>
+      </div>
+
+      <form id="control-form" class="settings-grid">
+        <label>
+          Temperature setpoint, °C
+          <input id="setpoint-temp-value" type="number" min="10" max="30" step="0.1" value="18.0" />
+        </label>
+
+        <label>
+          Test number
+          <input id="test-number-value" type="number" min="1" step="1" value="1" />
+        </label>
+
+        <label>
+          Test duration, seconds
+          <input id="test-duration-value" type="number" min="10" step="10" value="600" />
+        </label>
+
+        <div class="toggle-stack">
+          <label class="checkbox-label">
+            <input id="peltier-enable-toggle" type="checkbox" />
+            Enable Peltier control
+          </label>
+
+          <label class="checkbox-label">
+            <input id="auto-control-toggle" type="checkbox" checked />
+            Automatic control
+          </label>
+
+          <label class="checkbox-label">
+            <input id="manual-peltier-toggle" type="checkbox" />
+            Manual Peltier ON
+          </label>
+        </div>
+
+        <div class="button-row control-buttons">
+          <button type="button" id="send-setpoint">Send setpoint</button>
+          <button type="button" id="send-toggle-controls" class="secondary">Send toggles</button>
+          <button type="button" id="send-test-settings" class="secondary">Send test settings</button>
+          <button type="button" id="send-all-controls" class="ghost">Send all</button>
+        </div>
+      </form>
+
+      <p class="control-note">
+        Remote writes require the AIO key. Do not hard-code it in the repository; enter it at runtime.
+      </p>
     </section>
 
     <section class="summary-grid">

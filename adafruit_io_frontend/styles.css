@@ -383,3 +383,57 @@ td { color: var(--text); }
 
   .sensor-stats { grid-template-columns: 1fr; }
 }
+
+/* Remote-control panel additions */
+.control-feed-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 18px;
+}
+
+.toggle-stack {
+  display: grid;
+  gap: 12px;
+  align-content: center;
+}
+
+.checkbox-label {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  border: 1px solid var(--border);
+  background: rgba(22, 42, 71, 0.50);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: auto;
+  min-width: 20px;
+  height: 20px;
+  accent-color: var(--data-cyan);
+  box-shadow: none;
+}
+
+.control-buttons {
+  align-items: center;
+}
+
+.control-note {
+  color: var(--muted);
+  font-size: 0.86rem;
+  margin: 14px 0 0;
+}
+
+.sensor-card.control::before {
+  background:
+    radial-gradient(circle at top right, rgba(52, 211, 153, 0.20), transparent 17rem),
+    linear-gradient(135deg, rgba(56, 189, 248, 0.10), transparent 45%);
+}
+
+.sensor-card.control .sensor-value {
+  color: var(--success);
+}
