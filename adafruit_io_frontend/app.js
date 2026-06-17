@@ -4,7 +4,7 @@ const STORAGE_KEY = "mussels_to_muscles_sensor_dashboard_settings";
 const SENSOR_DEFINITIONS = [
   {
     id: "temperature1",
-    label: "Temperature 1",
+    label: "Temp 1 Mussels",
     unit: "°C",
     inputId: "temperature1-feed",
     settingsKey: "temperature1Feed",
@@ -15,7 +15,7 @@ const SENSOR_DEFINITIONS = [
   },
   {
     id: "temperature2",
-    label: "Temperature 2",
+    label: "Temp 2 Algae",
     unit: "°C",
     inputId: "temperature2-feed",
     settingsKey: "temperature2Feed",
@@ -35,7 +35,71 @@ const SENSOR_DEFINITIONS = [
     decimals: 1,
     color: "#FBBF24",
   },
+  {
+    id: "od-water",
+    label: "OD Water",
+    unit: "OD",
+    inputId: "od-water-feed",
+    settingsKey: "odWaterFeed",
+    defaultFeed: "od-water",
+    cssClass: "light",
+    decimals: 3,
+    color: "#38BDF8",
+  },
+  {
+    id: "setpoint-active",
+    label: "Setpoint",
+    unit: "°C",
+    inputId: "setpoint-active-feed",
+    settingsKey: "setpointActiveFeed",
+    defaultFeed: "setpoint-active",
+    cssClass: "control",
+    decimals: 1,
+    color: "#34D399",
+  },
+  {
+    id: "relay-state",
+    label: "Relay State",
+    unit: "",
+    inputId: "relay-state-feed",
+    settingsKey: "relayStateFeed",
+    defaultFeed: "relay-state",
+    cssClass: "control",
+    decimals: 0,
+    color: "#FB7185",
+  },
+  {
+    id: "test-number-active",
+    label: "Test Number",
+    unit: "",
+    inputId: "test-number-active-feed",
+    settingsKey: "testNumberActiveFeed",
+    defaultFeed: "test-number-active",
+    cssClass: "control",
+    decimals: 0,
+    color: "#B9C2D0",
+  },
+  {
+    id: "elapsed-test-s",
+    label: "Elapsed Test Time",
+    unit: "s",
+    inputId: "elapsed-test-s-feed",
+    settingsKey: "elapsedTestSFeed",
+    defaultFeed: "elapsed-test-s",
+    cssClass: "control",
+    decimals: 0,
+    color: "#6F7D95",
+  },
 ];
+
+const CONTROL_FEEDS = {
+  setpointTemp: "setpoint-temp",
+  peltierEnable: "peltier-enable",
+  autoControl: "auto-control",
+  manualPeltier: "manual-peltier",
+  testNumber: "test-number",
+  testDurationS: "test-duration-s",
+};
 
 let refreshTimer = null;
 let latestSettings = null;
@@ -57,6 +121,16 @@ const elements = {
   sensorCards: document.getElementById("sensor-cards"),
   sensorCharts: document.getElementById("sensor-charts"),
   tableBody: document.getElementById("data-table-body"),
+  setpointTempValue: document.getElementById("setpoint-temp-value"),
+  peltierEnableToggle: document.getElementById("peltier-enable-toggle"),
+  autoControlToggle: document.getElementById("auto-control-toggle"),
+  manualPeltierToggle: document.getElementById("manual-peltier-toggle"),
+  testNumberValue: document.getElementById("test-number-value"),
+  testDurationValue: document.getElementById("test-duration-value"),
+  sendSetpoint: document.getElementById("send-setpoint"),
+  sendToggleControls: document.getElementById("send-toggle-controls"),
+  sendTestSettings: document.getElementById("send-test-settings"),
+  sendAllControls: document.getElementById("send-all-controls"),
 };
 
 function setStatus(type, message) {
@@ -160,7 +234,8 @@ async function fetchFeedData(settings, sensor) {
 }
 
 function formatValue(value, sensor) {
-  return `${value.toFixed(sensor.decimals)} ${sensor.unit}`;
+  const formatted = value.toFixed(sensor.decimals);
+  return sensor.unit ? `${formatted} ${sensor.unit}` : formatted;
 }
 
 function formatDate(date) {
@@ -377,6 +452,101 @@ function renderTable(results) {
   `).join("");
 }
 
+
+async function postFeedValue(settings, feedKey, value) {
+  const url = new URL(`${API_ROOT}/${encodeURIComponent(settings.username)}/feeds/${encodeURIComponent(feedKey)}/data`);
+
+  const headers = { "Content-Type": "application/json" };
+  if (settings.aioKey) headers["X-AIO-Key"] = settings.aioKey;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ value: String(value) }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`${feedKey}: ${response.status} ${response.statusText} ${text}`);
+  }
+
+  return response.json().catch(() => null);
+}
+
+function getControlSettings() {
+  const settings = getSettingsFromForm();
+
+  if (!settings.username) {
+    throw new Error("Adafruit IO username is required");
+  }
+
+  if (!settings.aioKey) {
+    throw new Error("AIO key is required to write remote-control feeds");
+  }
+
+  latestSettings = settings;
+  return settings;
+}
+
+async function sendSetpoint() {
+  try {
+    const settings = getControlSettings();
+    const value = Number(elements.setpointTempValue.value);
+
+    if (!Number.isFinite(value)) {
+      throw new Error("Setpoint must be a number");
+    }
+
+    await postFeedValue(settings, CONTROL_FEEDS.setpointTemp, value.toFixed(1));
+    setStatus("ok", `Setpoint sent: ${value.toFixed(1)} °C`);
+  } catch (error) {
+    setStatus("error", error.message || String(error));
+  }
+}
+
+async function sendToggleControls() {
+  try {
+    const settings = getControlSettings();
+
+    await postFeedValue(settings, CONTROL_FEEDS.peltierEnable, elements.peltierEnableToggle.checked ? 1 : 0);
+    await postFeedValue(settings, CONTROL_FEEDS.autoControl, elements.autoControlToggle.checked ? 1 : 0);
+    await postFeedValue(settings, CONTROL_FEEDS.manualPeltier, elements.manualPeltierToggle.checked ? 1 : 0);
+
+    setStatus("ok", "Toggle controls sent");
+  } catch (error) {
+    setStatus("error", error.message || String(error));
+  }
+}
+
+async function sendTestSettings() {
+  try {
+    const settings = getControlSettings();
+    const testNumber = Number(elements.testNumberValue.value);
+    const testDuration = Number(elements.testDurationValue.value);
+
+    if (!Number.isFinite(testNumber) || testNumber < 1) {
+      throw new Error("Test number must be >= 1");
+    }
+
+    if (!Number.isFinite(testDuration) || testDuration < 10) {
+      throw new Error("Test duration must be at least 10 seconds");
+    }
+
+    await postFeedValue(settings, CONTROL_FEEDS.testNumber, Math.round(testNumber));
+    await postFeedValue(settings, CONTROL_FEEDS.testDurationS, Math.round(testDuration));
+
+    setStatus("ok", `Test settings sent: test ${Math.round(testNumber)}, ${Math.round(testDuration)} s`);
+  } catch (error) {
+    setStatus("error", error.message || String(error));
+  }
+}
+
+async function sendAllControls() {
+  await sendSetpoint();
+  await sendToggleControls();
+  await sendTestSettings();
+}
+
 async function refreshData() {
   if (!latestSettings) return;
 
@@ -444,6 +614,10 @@ elements.form.addEventListener("submit", (event) => {
 elements.saveSettings.addEventListener("click", saveSettings);
 elements.clearSettings.addEventListener("click", clearSettings);
 elements.refreshNow.addEventListener("click", refreshData);
+elements.sendSetpoint.addEventListener("click", sendSetpoint);
+elements.sendToggleControls.addEventListener("click", sendToggleControls);
+elements.sendTestSettings.addEventListener("click", sendTestSettings);
+elements.sendAllControls.addEventListener("click", sendAllControls);
 
 loadSettings();
 setStatus("idle", "Enter feed settings and connect");
