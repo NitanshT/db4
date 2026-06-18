@@ -14,8 +14,7 @@ To run from main.py:
 
 from machine import Pin, PWM
 from thermistor import Thermistor
-from calibration import PIN_36_ADC_LOOKUP
-from sensor_config import THERMISTOR_1_PIN, MOSFET_PWM, MOSFET_PWM_FREQ, Kp, Ki
+from sensor_config import THERMISTOR_1_PIN, MOSFET_PWM, MOSFET_PWM_FREQ, Kp, Ki, PIN36_ADC_LOOKUP, PIN39_ADC_LOOKUP
 import utime
 import os
 
@@ -50,7 +49,7 @@ class PIController:
 
         self.therm = Thermistor(
             pin_no=THERM_PIN,
-            adc_lookup=PIN_36_ADC_LOOKUP
+            adc_lookup=PIN36_ADC_LOOKUP
         )
         self.pwm = PWM(Pin(PWM_PIN), freq=PWM_FREQ)
         self.pwm.duty(0)
@@ -96,15 +95,17 @@ class PIController:
             self._logfile.flush()
             self._log_write_count = 0
 
-    def run(self):
+    def run(self, max_iterations=None, stop_check=None, display=None):
         if self.verbose:
             print('PI controller running. Setpoint: {}°C'.format(self.setpoint))
             print('Kp={} Ki={}'.format(self.kp, self.ki))
 
         consecutive_errors = 0
+        iteration = 0
 
         try:
-            while True:
+            while max_iterations is None or iteration < max_iterations:
+                iteration += 1
                 loop_start = utime.ticks_ms()
 
                 try:
@@ -126,14 +127,24 @@ class PIController:
                         print('t={}s  T={:.2f}°C  err={:.2f}  PWM={}%'.format(
                             ts, temp, error, pwm_pct))
 
+                    if display is not None:
+                        display.show_run(self.setpoint, temp, error, pwm_pct, iteration)
+
                     self._log(ts, temp, pwm_pct, error)
 
                 except Exception as e:
                     consecutive_errors += 1
                     self._fail_safe(e)
+                    if display is not None:
+                        display.show_fault(e, consecutive_errors)
                     if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
                         print('{} consecutive errors — stopping controller.'.format(consecutive_errors))
                         raise
+
+                if stop_check is not None and stop_check():
+                    if self.verbose:
+                        print('Stop button pressed — shutting down.')
+                    break
 
                 elapsed = utime.ticks_diff(utime.ticks_ms(), loop_start)
                 sleep_time = max(0, DT_MS - elapsed)
