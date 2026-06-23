@@ -13,22 +13,55 @@ test-number-active
 elapsed-test-s
 ```
 
-Leave any feed field empty to hide it from the charts/cards.
-
 ## Remote-control feeds
 
-The frontend can write control values to these Adafruit IO feeds:
+The frontend writes only these control values to Adafruit IO:
 
 ```text
 setpoint-temp
-peltier-enable
-auto-control
-manual-peltier
+system-enable
 test-number
 test-duration-s
 ```
 
-The ESP32 must subscribe to these feeds over MQTT. The matching ESP32 files are `publish_dashboard.py` and `sensor_config_dashboard.py`.
+`setpoint-temp` is the PI temperature reference point. The ESP32 should update the PI controller setpoint from this feed.
+
+`system-enable` is the full remote system enable/disable control:
+
+```text
+1 = system enabled / PI control allowed to run
+0 = system disabled / actuators forced OFF or duty = 0
+```
+
+The ESP32 must subscribe to these feeds over MQTT.
+
+## Data management and export
+
+The frontend includes a local data management panel for experiment documentation.
+
+It can:
+
+```text
+Save a local experiment snapshot
+Export the latest loaded results as CSV
+Export the latest loaded results as JSON
+Export all locally stored snapshots as JSON
+Clear locally stored snapshots
+```
+
+A saved/exported snapshot contains:
+
+```text
+Experiment name
+Experiment notes/conditions
+Adafruit username and feed mapping
+Remote-control parameter values
+Loaded telemetry results
+Timestamps and units
+```
+
+Data is stored in browser `localStorage`, so it remains local to that browser/machine.
+CSV and JSON exports are standard downloadable files.
 
 ## Usage
 
@@ -36,7 +69,8 @@ The ESP32 must subscribe to these feeds over MQTT. The matching ESP32 files are 
 2. Enter your Adafruit IO username and AIO key.
 3. Click **Connect** to load data.
 4. Use **Remote controls** to write control values to Adafruit IO.
-5. The ESP32 reads those control feeds and updates the relay/Peltier control loop.
+5. Use **Data management and export** to save or export results.
+6. The ESP32 reads the control feeds and updates the PI setpoint and system enable state.
 
 ## Security
 
