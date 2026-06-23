@@ -17,18 +17,25 @@ Leave any feed field empty to hide it from the charts/cards.
 
 ## Remote-control feeds
 
-The frontend can write control values to these Adafruit IO feeds:
+The frontend writes only these control values to Adafruit IO:
 
 ```text
 setpoint-temp
-peltier-enable
-auto-control
-manual-peltier
+system-enable
 test-number
 test-duration-s
 ```
 
-The ESP32 must subscribe to these feeds over MQTT. The matching ESP32 files are `publish_dashboard.py` and `sensor_config_dashboard.py`.
+`setpoint-temp` is the PI temperature reference point. The ESP32 should update the PI controller setpoint from this feed.
+
+`system-enable` is the full remote system enable/disable control:
+
+```text
+1 = system enabled / PI control allowed to run
+0 = system disabled / actuators forced OFF or duty = 0
+```
+
+The ESP32 must subscribe to these feeds over MQTT.
 
 ## Usage
 
@@ -36,7 +43,7 @@ The ESP32 must subscribe to these feeds over MQTT. The matching ESP32 files are 
 2. Enter your Adafruit IO username and AIO key.
 3. Click **Connect** to load data.
 4. Use **Remote controls** to write control values to Adafruit IO.
-5. The ESP32 reads those control feeds and updates the relay/Peltier control loop.
+5. The ESP32 reads those control feeds and updates the PI setpoint and system enable state.
 
 ## Security
 

@@ -94,9 +94,7 @@ const SENSOR_DEFINITIONS = [
 
 const CONTROL_FEEDS = {
   setpointTemp: "setpoint-temp",
-  peltierEnable: "peltier-enable",
-  autoControl: "auto-control",
-  manualPeltier: "manual-peltier",
+  systemEnable: "system-enable",
   testNumber: "test-number",
   testDurationS: "test-duration-s",
 };
@@ -122,15 +120,20 @@ const elements = {
   sensorCharts: document.getElementById("sensor-charts"),
   tableBody: document.getElementById("data-table-body"),
   setpointTempValue: document.getElementById("setpoint-temp-value"),
-  peltierEnableToggle: document.getElementById("peltier-enable-toggle"),
-  autoControlToggle: document.getElementById("auto-control-toggle"),
-  manualPeltierToggle: document.getElementById("manual-peltier-toggle"),
+  systemEnableToggle: document.getElementById("system-enable-toggle"),
   testNumberValue: document.getElementById("test-number-value"),
   testDurationValue: document.getElementById("test-duration-value"),
   sendSetpoint: document.getElementById("send-setpoint"),
-  sendToggleControls: document.getElementById("send-toggle-controls"),
+  sendSystemEnable: document.getElementById("send-system-enable"),
   sendTestSettings: document.getElementById("send-test-settings"),
   sendAllControls: document.getElementById("send-all-controls"),
+  setpointSlider: document.getElementById("setpoint-temp-slider"),
+  setpointDisplay: document.getElementById("setpoint-display"),
+  systemEnableDisplay: document.getElementById("system-enable-display"),
+  testNumberSlider: document.getElementById("test-number-slider"),
+  testNumberDisplay: document.getElementById("test-number-display"),
+  testDurationSlider: document.getElementById("test-duration-slider"),
+  testDurationDisplay: document.getElementById("test-duration-display"),
 };
 
 function setStatus(type, message) {
@@ -202,6 +205,7 @@ function clearSettings() {
   localStorage.removeItem(STORAGE_KEY);
   elements.form.reset();
   setFormFromSettings();
+  updateRemoteControlUi();
   setStatus("idle", "Settings cleared");
 }
 
@@ -498,21 +502,19 @@ async function sendSetpoint() {
     }
 
     await postFeedValue(settings, CONTROL_FEEDS.setpointTemp, value.toFixed(1));
-    setStatus("ok", `Setpoint sent: ${value.toFixed(1)} °C`);
+    setStatus("ok", `PI temperature reference sent: ${value.toFixed(1)} °C`);
   } catch (error) {
     setStatus("error", error.message || String(error));
   }
 }
 
-async function sendToggleControls() {
+async function sendSystemEnable() {
   try {
     const settings = getControlSettings();
+    const value = elements.systemEnableToggle.checked ? 1 : 0;
 
-    await postFeedValue(settings, CONTROL_FEEDS.peltierEnable, elements.peltierEnableToggle.checked ? 1 : 0);
-    await postFeedValue(settings, CONTROL_FEEDS.autoControl, elements.autoControlToggle.checked ? 1 : 0);
-    await postFeedValue(settings, CONTROL_FEEDS.manualPeltier, elements.manualPeltierToggle.checked ? 1 : 0);
-
-    setStatus("ok", "Toggle controls sent");
+    await postFeedValue(settings, CONTROL_FEEDS.systemEnable, value);
+    setStatus("ok", value ? "System enabled" : "System shutdown sent");
   } catch (error) {
     setStatus("error", error.message || String(error));
   }
@@ -543,8 +545,76 @@ async function sendTestSettings() {
 
 async function sendAllControls() {
   await sendSetpoint();
-  await sendToggleControls();
+  await sendSystemEnable();
   await sendTestSettings();
+}
+
+function updateRemoteControlUi() {
+  if (elements.setpointTempValue && elements.setpointSlider && elements.setpointDisplay) {
+    const setpoint = clampNumber(Number(elements.setpointTempValue.value), 10, 30, 18).toFixed(1);
+    elements.setpointTempValue.value = setpoint;
+    elements.setpointSlider.value = setpoint;
+    elements.setpointDisplay.textContent = setpoint;
+  }
+
+  if (elements.systemEnableDisplay && elements.systemEnableToggle) {
+    elements.systemEnableDisplay.textContent = elements.systemEnableToggle.checked ? "Running" : "Stopped";
+  }
+
+  if (elements.testNumberValue && elements.testNumberSlider && elements.testNumberDisplay) {
+    const number = Math.max(1, Math.round(Number(elements.testNumberValue.value) || 1));
+    elements.testNumberValue.value = String(number);
+    elements.testNumberSlider.value = String(Math.min(number, 20));
+    elements.testNumberDisplay.textContent = String(number);
+  }
+
+  if (elements.testDurationValue && elements.testDurationSlider && elements.testDurationDisplay) {
+    const duration = Math.max(10, Math.round(Number(elements.testDurationValue.value) || 600));
+    elements.testDurationValue.value = String(duration);
+    elements.testDurationSlider.value = String(Math.min(Math.max(duration, 60), 3600));
+    elements.testDurationDisplay.textContent = String(duration);
+  }
+}
+
+function bindRemoteControlUi() {
+  if (elements.setpointSlider) {
+    elements.setpointSlider.addEventListener("input", () => {
+      elements.setpointTempValue.value = elements.setpointSlider.value;
+      updateRemoteControlUi();
+    });
+  }
+
+  if (elements.setpointTempValue) {
+    elements.setpointTempValue.addEventListener("input", updateRemoteControlUi);
+  }
+
+  if (elements.systemEnableToggle) {
+    elements.systemEnableToggle.addEventListener("change", updateRemoteControlUi);
+  }
+
+  if (elements.testNumberSlider) {
+    elements.testNumberSlider.addEventListener("input", () => {
+      elements.testNumberValue.value = elements.testNumberSlider.value;
+      updateRemoteControlUi();
+    });
+  }
+
+  if (elements.testNumberValue) {
+    elements.testNumberValue.addEventListener("input", updateRemoteControlUi);
+  }
+
+  if (elements.testDurationSlider) {
+    elements.testDurationSlider.addEventListener("input", () => {
+      elements.testDurationValue.value = elements.testDurationSlider.value;
+      updateRemoteControlUi();
+    });
+  }
+
+  if (elements.testDurationValue) {
+    elements.testDurationValue.addEventListener("input", updateRemoteControlUi);
+  }
+
+  updateRemoteControlUi();
 }
 
 async function refreshData() {
@@ -615,11 +685,13 @@ elements.saveSettings.addEventListener("click", saveSettings);
 elements.clearSettings.addEventListener("click", clearSettings);
 elements.refreshNow.addEventListener("click", refreshData);
 elements.sendSetpoint.addEventListener("click", sendSetpoint);
-elements.sendToggleControls.addEventListener("click", sendToggleControls);
+elements.sendSystemEnable.addEventListener("click", sendSystemEnable);
 elements.sendTestSettings.addEventListener("click", sendTestSettings);
 elements.sendAllControls.addEventListener("click", sendAllControls);
+bindRemoteControlUi();
 
 loadSettings();
+updateRemoteControlUi();
 setStatus("idle", "Enter feed settings and connect");
 renderSummary([]);
 renderSensorCards([]);

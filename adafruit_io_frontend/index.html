@@ -19,7 +19,6 @@
           </p>
         </div>
       </div>
-
       <div class="status-card">
         <span id="connection-dot" class="dot dot-idle"></span>
         <span id="connection-status">Not connected</span>
@@ -108,63 +107,104 @@
       </form>
     </section>
 
-    <section class="panel control-panel">
-      <div class="section-title">
+    <section class="panel control-panel dashboard-controls">
+      <div class="section-title control-title-row">
         <div>
           <h2>Remote controls</h2>
           <p>
-            These controls write to Adafruit IO feeds. The ESP32 subscribes to these feeds and updates the relay/Peltier logic remotely.
+            Adafruit-style controls for the PI controller reference point, system enable state, and test setup.
           </p>
+        </div>
+        <div class="button-row control-top-actions">
+          <button type="button" id="send-all-controls">Send all controls</button>
         </div>
       </div>
 
       <div class="control-feed-grid">
         <span class="feed-pill">setpoint-temp</span>
-        <span class="feed-pill">peltier-enable</span>
-        <span class="feed-pill">auto-control</span>
-        <span class="feed-pill">manual-peltier</span>
+        <span class="feed-pill">system-enable</span>
         <span class="feed-pill">test-number</span>
         <span class="feed-pill">test-duration-s</span>
       </div>
 
-      <form id="control-form" class="settings-grid">
-        <label>
-          Temperature setpoint, °C
-          <input id="setpoint-temp-value" type="number" min="10" max="30" step="0.1" value="18.0" />
-        </label>
+      <form id="control-form" class="dashboard-control-grid compact-controls">
+        <article class="control-block primary-block">
+          <div class="control-block-head">
+            <div>
+              <p class="control-label">PI temperature reference</p>
+              <h3><span id="setpoint-display">18.0</span><span class="control-unit">°C</span></h3>
+            </div>
+            <span class="feed-pill">setpoint-temp</span>
+          </div>
 
-        <label>
-          Test number
-          <input id="test-number-value" type="number" min="1" step="1" value="1" />
-        </label>
+          <p class="control-note compact">Reference point used by the ESP32 PI controller to regulate the tank temperature.</p>
+          <input id="setpoint-temp-slider" class="range-control" type="range" min="10" max="30" step="0.1" value="18.0" />
 
-        <label>
-          Test duration, seconds
-          <input id="test-duration-value" type="number" min="10" step="10" value="600" />
-        </label>
+          <div class="range-row">
+            <span>10°C</span>
+            <input id="setpoint-temp-value" class="control-number" type="number" min="10" max="30" step="0.1" value="18.0" />
+            <span>30°C</span>
+          </div>
 
-        <div class="toggle-stack">
-          <label class="checkbox-label">
-            <input id="peltier-enable-toggle" type="checkbox" />
-            Enable Peltier control
+          <button type="button" id="send-setpoint" class="block-button">Send setpoint</button>
+        </article>
+
+        <article class="control-block system-block">
+          <div class="control-block-head">
+            <div>
+              <p class="control-label">System enable</p>
+              <h3 id="system-enable-display">Running</h3>
+            </div>
+            <span class="feed-pill">system-enable</span>
+          </div>
+
+          <label class="switch-line">
+            <input id="system-enable-toggle" type="checkbox" checked />
+            <span class="switch-ui"></span>
+            <span class="switch-copy">ON allows the PI control loop to operate. OFF should force actuators to zero on the ESP32.</span>
           </label>
 
-          <label class="checkbox-label">
-            <input id="auto-control-toggle" type="checkbox" checked />
-            Automatic control
-          </label>
+          <button type="button" id="send-system-enable" class="secondary block-button">Send system state</button>
+        </article>
 
-          <label class="checkbox-label">
-            <input id="manual-peltier-toggle" type="checkbox" />
-            Manual Peltier ON
-          </label>
-        </div>
+        <div class="test-settings-grid">
+          <article class="control-block">
+            <div class="control-block-head">
+              <div>
+                <p class="control-label">Test number</p>
+                <h3><span id="test-number-display">1</span></h3>
+              </div>
+              <span class="feed-pill">test-number</span>
+            </div>
 
-        <div class="button-row control-buttons">
-          <button type="button" id="send-setpoint">Send setpoint</button>
-          <button type="button" id="send-toggle-controls" class="secondary">Send toggles</button>
-          <button type="button" id="send-test-settings" class="secondary">Send test settings</button>
-          <button type="button" id="send-all-controls" class="ghost">Send all</button>
+            <input id="test-number-slider" class="range-control" type="range" min="1" max="20" step="1" value="1" />
+
+            <div class="range-row">
+              <span>1</span>
+              <input id="test-number-value" class="control-number" type="number" min="1" step="1" value="1" />
+              <span>20+</span>
+            </div>
+          </article>
+
+          <article class="control-block">
+            <div class="control-block-head">
+              <div>
+                <p class="control-label">Test duration</p>
+                <h3><span id="test-duration-display">600</span><span class="control-unit">s</span></h3>
+              </div>
+              <span class="feed-pill">test-duration-s</span>
+            </div>
+
+            <input id="test-duration-slider" class="range-control" type="range" min="60" max="3600" step="60" value="600" />
+
+            <div class="range-row">
+              <span>60s</span>
+              <input id="test-duration-value" class="control-number" type="number" min="10" step="10" value="600" />
+              <span>3600s</span>
+            </div>
+
+            <button type="button" id="send-test-settings" class="secondary block-button">Send test settings</button>
+          </article>
         </div>
       </form>
 
