@@ -19,6 +19,7 @@
           </p>
         </div>
       </div>
+
       <div class="status-card">
         <span id="connection-dot" class="dot dot-idle"></span>
         <span id="connection-status">Not connected</span>
@@ -112,10 +113,11 @@
         <div>
           <h2>Remote controls</h2>
           <p>
-            Adafruit-style controls for the PI controller reference point, system enable state, and test setup.
+            Adafruit-style control blocks for the PI temperature reference, full system enable state, and test setup.
           </p>
         </div>
         <div class="button-row control-top-actions">
+          <button type="button" id="send-toggle-controls" class="secondary">Send toggles</button>
           <button type="button" id="send-all-controls">Send all controls</button>
         </div>
       </div>
@@ -127,47 +129,49 @@
         <span class="feed-pill">test-duration-s</span>
       </div>
 
-      <form id="control-form" class="dashboard-control-grid compact-controls">
-        <article class="control-block primary-block">
-          <div class="control-block-head">
-            <div>
-              <p class="control-label">PI temperature reference</p>
-              <h3><span id="setpoint-display">18.0</span><span class="control-unit">°C</span></h3>
+      <form id="control-form" class="dashboard-control-grid">
+        <div class="control-row">
+          <article class="control-block primary-block">
+            <div class="control-block-head">
+              <div>
+                <p class="control-label">PI temperature reference</p>
+                <h3><span id="setpoint-display">18.0</span><span class="control-unit">°C</span></h3>
+              </div>
+              <span class="feed-pill">setpoint-temp</span>
             </div>
-            <span class="feed-pill">setpoint-temp</span>
-          </div>
 
-          <p class="control-note compact">Reference point used by the ESP32 PI controller to regulate the tank temperature.</p>
-          <input id="setpoint-temp-slider" class="range-control" type="range" min="10" max="30" step="0.1" value="18.0" />
+            <p class="control-note compact">Reference point used by the ESP32 PI controller to regulate temperature.</p>
+            <input id="setpoint-temp-slider" class="range-control" type="range" min="10" max="30" step="0.1" value="18.0" />
 
-          <div class="range-row">
-            <span>10°C</span>
-            <input id="setpoint-temp-value" class="control-number" type="number" min="10" max="30" step="0.1" value="18.0" />
-            <span>30°C</span>
-          </div>
-
-          <button type="button" id="send-setpoint" class="block-button">Send setpoint</button>
-        </article>
-
-        <article class="control-block system-block">
-          <div class="control-block-head">
-            <div>
-              <p class="control-label">System enable</p>
-              <h3 id="system-enable-display">Running</h3>
+            <div class="range-row">
+              <span>10°C</span>
+              <input id="setpoint-temp-value" class="control-number" type="number" min="10" max="30" step="0.1" value="18.0" />
+              <span>30°C</span>
             </div>
-            <span class="feed-pill">system-enable</span>
-          </div>
 
-          <label class="switch-line">
-            <input id="system-enable-toggle" type="checkbox" checked />
-            <span class="switch-ui"></span>
-            <span class="switch-copy">ON allows the PI control loop to operate. OFF should force actuators to zero on the ESP32.</span>
-          </label>
+            <button type="button" id="send-setpoint" class="block-button">Send setpoint</button>
+          </article>
 
-          <button type="button" id="send-system-enable" class="secondary block-button">Send system state</button>
-        </article>
+          <article class="control-block">
+            <div class="control-block-head">
+              <div>
+                <p class="control-label">System enable</p>
+                <h3 id="system-enable-display">Running</h3>
+              </div>
+              <span class="feed-pill">system-enable</span>
+            </div>
 
-        <div class="test-settings-grid">
+            <label class="switch-line">
+              <input id="system-enable-toggle" type="checkbox" checked />
+              <span class="switch-ui"></span>
+              <span class="switch-copy">ON allows the PI control loop to operate. OFF should force all actuators to zero on the ESP32.</span>
+            </label>
+
+            <button type="button" id="send-system-enable" class="secondary block-button">Send system state</button>
+          </article>
+        </div>
+
+        <div class="control-row test-row">
           <article class="control-block">
             <div class="control-block-head">
               <div>
@@ -195,22 +199,70 @@
               <span class="feed-pill">test-duration-s</span>
             </div>
 
-            <input id="test-duration-slider" class="range-control" type="range" min="60" max="3600" step="60" value="600" />
+            <input id="test-duration-slider" class="range-control" type="range" min="0" max="86400" step="1" value="600" />
 
             <div class="range-row">
-              <span>60s</span>
-              <input id="test-duration-value" class="control-number" type="number" min="10" step="10" value="600" />
-              <span>3600s</span>
+              <span>0s</span>
+              <input id="test-duration-value" class="control-number" type="number" min="0" max="86400" step="1" value="600" />
+              <span>86400s</span>
             </div>
 
             <button type="button" id="send-test-settings" class="secondary block-button">Send test settings</button>
+          </article>
+
+          <article class="control-block elapsed-block">
+            <div class="control-block-head">
+              <div>
+                <p class="control-label">Elapsed test time</p>
+                <h3><span id="elapsed-test-display">00:00</span></h3>
+              </div>
+              <span class="feed-pill">elapsed-test-s</span>
+            </div>
+
+            <p class="control-note compact">Starts when you press Start experiment and publishes elapsed seconds to the feed.</p>
+
+            <button type="button" id="start-experiment" class="block-button">Start experiment</button>
+            <button type="button" id="stop-experiment" class="danger-button block-button">Stop experiment</button>
           </article>
         </div>
       </form>
 
       <p class="control-note">
-        Remote writes require the AIO key. Do not hard-code it in the repository; enter it at runtime.
+        Removed from remote control: <code>peltier-enable</code>, <code>auto-control</code>, and <code>manual-peltier</code>. System shutdown is now handled by <code>system-enable</code>.
       </p>
+    </section>
+
+    <section class="panel data-management-panel">
+      <div class="section-title">
+        <div>
+          <h2>Data management and export</h2>
+          <p>
+            Store experiment parameters and loaded results locally, then export them in standard formats for documentation and analysis.
+          </p>
+        </div>
+      </div>
+
+      <form id="data-management-form" class="settings-grid">
+        <label>
+          Experiment / test name
+          <input id="experiment-name" type="text" value="mussels-test-1" />
+        </label>
+
+        <label>
+          Notes / conditions
+          <input id="experiment-notes" type="text" placeholder="e.g. algae batch, tank condition, calibration note" />
+        </label>
+
+        <div class="button-row control-buttons">
+          <button type="button" id="save-data-snapshot">Save snapshot locally</button>
+          <button type="button" id="export-latest-csv" class="secondary">Export latest CSV</button>
+          <button type="button" id="export-latest-json" class="secondary">Export latest JSON</button>
+          <button type="button" id="export-stored-json" class="ghost">Export stored JSON</button>
+          <button type="button" id="clear-stored-data" class="ghost">Clear stored data</button>
+        </div>
+      </form>
+
+      <p id="storage-status" class="control-note">No local experiment snapshots saved yet.</p>
     </section>
 
     <section class="summary-grid">

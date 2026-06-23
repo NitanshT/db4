@@ -13,8 +13,6 @@ test-number-active
 elapsed-test-s
 ```
 
-Leave any feed field empty to hide it from the charts/cards.
-
 ## Remote-control feeds
 
 The frontend writes only these control values to Adafruit IO:
@@ -37,13 +35,42 @@ test-duration-s
 
 The ESP32 must subscribe to these feeds over MQTT.
 
+## Data management and export
+
+The frontend includes a local data management panel for experiment documentation.
+
+It can:
+
+```text
+Save a local experiment snapshot
+Export the latest loaded results as CSV
+Export the latest loaded results as JSON
+Export all locally stored snapshots as JSON
+Clear locally stored snapshots
+```
+
+A saved/exported snapshot contains:
+
+```text
+Experiment name
+Experiment notes/conditions
+Adafruit username and feed mapping
+Remote-control parameter values
+Loaded telemetry results
+Timestamps and units
+```
+
+Data is stored in browser `localStorage`, so it remains local to that browser/machine.
+CSV and JSON exports are standard downloadable files.
+
 ## Usage
 
 1. Open the site.
 2. Enter your Adafruit IO username and AIO key.
 3. Click **Connect** to load data.
 4. Use **Remote controls** to write control values to Adafruit IO.
-5. The ESP32 reads those control feeds and updates the PI setpoint and system enable state.
+5. Use **Data management and export** to save or export results.
+6. The ESP32 reads the control feeds and updates the PI setpoint and system enable state.
 
 ## Security
 

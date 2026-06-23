@@ -94,13 +94,26 @@ const SENSOR_DEFINITIONS = [
 
 const CONTROL_FEEDS = {
   setpointTemp: "setpoint-temp",
-  systemEnable: "system-enable",
+  peltierEnable: "peltier-enable",
+  autoControl: "auto-control",
+  manualPeltier: "manual-peltier",
   testNumber: "test-number",
   testDurationS: "test-duration-s",
 };
 
+const HIDDEN_TREND_SENSOR_IDS = new Set([
+  "setpoint-active",
+  "relay-state",
+  "test-number-active",
+  "elapsed-test-s",
+]);
+
 let refreshTimer = null;
 let latestSettings = null;
+let experimentTimer = null;
+let experimentStartTime = null;
+let experimentElapsedSeconds = 0;
+let experimentDurationSeconds = 0;
 
 const elements = {
   form: document.getElementById("settings-form"),
@@ -119,21 +132,26 @@ const elements = {
   sensorCards: document.getElementById("sensor-cards"),
   sensorCharts: document.getElementById("sensor-charts"),
   tableBody: document.getElementById("data-table-body"),
+  setpointTempSlider: document.getElementById("setpoint-temp-slider"),
   setpointTempValue: document.getElementById("setpoint-temp-value"),
-  systemEnableToggle: document.getElementById("system-enable-toggle"),
-  testNumberValue: document.getElementById("test-number-value"),
-  testDurationValue: document.getElementById("test-duration-value"),
-  sendSetpoint: document.getElementById("send-setpoint"),
-  sendSystemEnable: document.getElementById("send-system-enable"),
-  sendTestSettings: document.getElementById("send-test-settings"),
-  sendAllControls: document.getElementById("send-all-controls"),
-  setpointSlider: document.getElementById("setpoint-temp-slider"),
   setpointDisplay: document.getElementById("setpoint-display"),
   systemEnableDisplay: document.getElementById("system-enable-display"),
+  peltierEnableToggle: document.getElementById("peltier-enable-toggle"),
+  autoControlToggle: document.getElementById("auto-control-toggle"),
+  manualPeltierToggle: document.getElementById("manual-peltier-toggle"),
   testNumberSlider: document.getElementById("test-number-slider"),
+  testNumberValue: document.getElementById("test-number-value"),
   testNumberDisplay: document.getElementById("test-number-display"),
   testDurationSlider: document.getElementById("test-duration-slider"),
+  testDurationValue: document.getElementById("test-duration-value"),
   testDurationDisplay: document.getElementById("test-duration-display"),
+  elapsedTestDisplay: document.getElementById("elapsed-test-display"),
+  sendSetpoint: document.getElementById("send-setpoint"),
+  sendToggleControls: document.getElementById("send-toggle-controls"),
+  sendTestSettings: document.getElementById("send-test-settings"),
+  sendAllControls: document.getElementById("send-all-controls"),
+  startExperiment: document.getElementById("start-experiment"),
+  stopExperiment: document.getElementById("stop-experiment"),
 };
 
 function setStatus(type, message) {
@@ -147,6 +165,39 @@ function setStatus(type, message) {
 function clampNumber(value, min, max, fallback) {
   if (!Number.isFinite(value)) return fallback;
   return Math.min(max, Math.max(min, value));
+}
+
+function formatElapsedTime(totalSeconds) {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function setControlPairValue(rangeElement, numberElement, displayElement, rawValue, formatDisplay = (value) => value) {
+  const min = Number(rangeElement.min);
+  const max = Number(rangeElement.max);
+  const fallback = Number(rangeElement.value);
+  const clamped = clampNumber(Number(rawValue), min, max, fallback);
+
+  rangeElement.value = String(clamped);
+  numberElement.value = String(clamped);
+  if (displayElement) displayElement.textContent = formatDisplay(clamped);
+
+  return clamped;
+}
+
+function syncControlPair(rangeElement, numberElement, displayElement, formatDisplay = (value) => value) {
+  const applyValue = (rawValue) => setControlPairValue(rangeElement, numberElement, displayElement, rawValue, formatDisplay);
+
+  rangeElement.addEventListener("input", () => applyValue(rangeElement.value));
+  numberElement.addEventListener("input", () => applyValue(numberElement.value));
+  applyValue(rangeElement.value);
 }
 
 function getSettingsFromForm() {
@@ -172,6 +223,36 @@ function setFormFromSettings(settings = {}) {
 
   for (const sensor of SENSOR_DEFINITIONS) {
     document.getElementById(sensor.inputId).value = settings[sensor.settingsKey] ?? sensor.defaultFeed;
+  }
+
+  if (elements.setpointTempSlider && elements.setpointTempValue) {
+    setControlPairValue(
+      elements.setpointTempSlider,
+      elements.setpointTempValue,
+      elements.setpointDisplay,
+      settings.setpointTemp ?? 18,
+      (value) => Number(value).toFixed(1),
+    );
+  }
+
+  if (elements.testNumberSlider && elements.testNumberValue) {
+    setControlPairValue(
+      elements.testNumberSlider,
+      elements.testNumberValue,
+      elements.testNumberDisplay,
+      settings.testNumber ?? 1,
+      (value) => String(Math.round(Number(value))),
+    );
+  }
+
+  if (elements.testDurationSlider && elements.testDurationValue) {
+    setControlPairValue(
+      elements.testDurationSlider,
+      elements.testDurationValue,
+      elements.testDurationDisplay,
+      settings.testDurationS ?? 600,
+      (value) => String(Math.round(Number(value))),
+    );
   }
 }
 
@@ -205,7 +286,6 @@ function clearSettings() {
   localStorage.removeItem(STORAGE_KEY);
   elements.form.reset();
   setFormFromSettings();
-  updateRemoteControlUi();
   setStatus("idle", "Settings cleared");
 }
 
@@ -339,7 +419,7 @@ function renderSensorCards(results) {
 
 function renderCharts(results) {
   elements.sensorCharts.innerHTML = results
-    .filter((result) => !result.error)
+    .filter((result) => !result.error && !HIDDEN_TREND_SENSOR_IDS.has(result.sensor.id))
     .map((result) => `
       <article class="chart-card">
         <div class="section-title">
@@ -357,6 +437,7 @@ function renderCharts(results) {
   for (const result of results) {
     if (result.error) continue;
     const canvas = document.getElementById(`chart-${result.sensor.id}`);
+    if (!canvas) continue;
     drawChart(canvas, result.points, result.sensor);
   }
 }
@@ -431,6 +512,61 @@ function drawChart(canvas, points, sensor) {
   });
 }
 
+async function publishElapsedTestTime(settings, elapsedSeconds) {
+  if (!settings || !settings.username || !settings.aioKey) return;
+  await postFeedValue(settings, CONTROL_FEEDS.elapsedTestS, elapsedSeconds);
+}
+
+function updateElapsedTestDisplay() {
+  if (!elements.elapsedTestDisplay) return 0;
+
+  if (!experimentStartTime) {
+    elements.elapsedTestDisplay.textContent = formatElapsedTime(experimentElapsedSeconds);
+    return experimentElapsedSeconds;
+  }
+
+  experimentElapsedSeconds = Math.max(0, Math.floor((Date.now() - experimentStartTime) / 1000));
+  elements.elapsedTestDisplay.textContent = formatElapsedTime(experimentElapsedSeconds);
+  return experimentElapsedSeconds;
+}
+
+async function tickExperimentClock() {
+  const elapsedSeconds = updateElapsedTestDisplay();
+
+  try {
+    await publishElapsedTestTime(latestSettings, elapsedSeconds);
+  } catch {
+    // Keep the local clock running even if publishing fails.
+  }
+
+  if (Number.isFinite(experimentDurationSeconds) && elapsedSeconds >= experimentDurationSeconds) {
+    stopExperimentClock();
+    setStatus("ok", `Experiment completed at ${formatElapsedTime(elapsedSeconds)}`);
+  }
+}
+
+function startExperimentClock() {
+  experimentStartTime = Date.now();
+  experimentElapsedSeconds = 0;
+
+  if (experimentTimer) {
+    clearInterval(experimentTimer);
+  }
+
+  tickExperimentClock();
+  experimentTimer = setInterval(tickExperimentClock, 1000);
+}
+
+function stopExperimentClock() {
+  if (experimentTimer) {
+    clearInterval(experimentTimer);
+    experimentTimer = null;
+  }
+
+  experimentStartTime = null;
+  updateElapsedTestDisplay();
+}
+
 function renderTable(results) {
   const rows = results
     .filter((result) => !result.error && result.points.length > 0)
@@ -502,19 +638,21 @@ async function sendSetpoint() {
     }
 
     await postFeedValue(settings, CONTROL_FEEDS.setpointTemp, value.toFixed(1));
-    setStatus("ok", `PI temperature reference sent: ${value.toFixed(1)} °C`);
+    setStatus("ok", `Setpoint sent: ${value.toFixed(1)} °C`);
   } catch (error) {
     setStatus("error", error.message || String(error));
   }
 }
 
-async function sendSystemEnable() {
+async function sendToggleControls() {
   try {
     const settings = getControlSettings();
-    const value = elements.systemEnableToggle.checked ? 1 : 0;
 
-    await postFeedValue(settings, CONTROL_FEEDS.systemEnable, value);
-    setStatus("ok", value ? "System enabled" : "System shutdown sent");
+    await postFeedValue(settings, CONTROL_FEEDS.peltierEnable, elements.peltierEnableToggle.checked ? 1 : 0);
+    await postFeedValue(settings, CONTROL_FEEDS.autoControl, elements.autoControlToggle.checked ? 1 : 0);
+    await postFeedValue(settings, CONTROL_FEEDS.manualPeltier, elements.manualPeltierToggle.checked ? 1 : 0);
+
+    setStatus("ok", "Toggle controls sent");
   } catch (error) {
     setStatus("error", error.message || String(error));
   }
@@ -545,76 +683,19 @@ async function sendTestSettings() {
 
 async function sendAllControls() {
   await sendSetpoint();
-  await sendSystemEnable();
+  await sendToggleControls();
   await sendTestSettings();
 }
 
-function updateRemoteControlUi() {
-  if (elements.setpointTempValue && elements.setpointSlider && elements.setpointDisplay) {
-    const setpoint = clampNumber(Number(elements.setpointTempValue.value), 10, 30, 18).toFixed(1);
-    elements.setpointTempValue.value = setpoint;
-    elements.setpointSlider.value = setpoint;
-    elements.setpointDisplay.textContent = setpoint;
-  }
-
-  if (elements.systemEnableDisplay && elements.systemEnableToggle) {
-    elements.systemEnableDisplay.textContent = elements.systemEnableToggle.checked ? "Running" : "Stopped";
-  }
-
-  if (elements.testNumberValue && elements.testNumberSlider && elements.testNumberDisplay) {
-    const number = Math.max(1, Math.round(Number(elements.testNumberValue.value) || 1));
-    elements.testNumberValue.value = String(number);
-    elements.testNumberSlider.value = String(Math.min(number, 20));
-    elements.testNumberDisplay.textContent = String(number);
-  }
-
-  if (elements.testDurationValue && elements.testDurationSlider && elements.testDurationDisplay) {
-    const duration = Math.max(10, Math.round(Number(elements.testDurationValue.value) || 600));
-    elements.testDurationValue.value = String(duration);
-    elements.testDurationSlider.value = String(Math.min(Math.max(duration, 60), 3600));
-    elements.testDurationDisplay.textContent = String(duration);
-  }
+function startExperiment() {
+  experimentDurationSeconds = clampNumber(Number(elements.testDurationValue.value), 0, 86400, 600);
+  startExperimentClock();
+  setStatus("ok", "Experiment started");
 }
 
-function bindRemoteControlUi() {
-  if (elements.setpointSlider) {
-    elements.setpointSlider.addEventListener("input", () => {
-      elements.setpointTempValue.value = elements.setpointSlider.value;
-      updateRemoteControlUi();
-    });
-  }
-
-  if (elements.setpointTempValue) {
-    elements.setpointTempValue.addEventListener("input", updateRemoteControlUi);
-  }
-
-  if (elements.systemEnableToggle) {
-    elements.systemEnableToggle.addEventListener("change", updateRemoteControlUi);
-  }
-
-  if (elements.testNumberSlider) {
-    elements.testNumberSlider.addEventListener("input", () => {
-      elements.testNumberValue.value = elements.testNumberSlider.value;
-      updateRemoteControlUi();
-    });
-  }
-
-  if (elements.testNumberValue) {
-    elements.testNumberValue.addEventListener("input", updateRemoteControlUi);
-  }
-
-  if (elements.testDurationSlider) {
-    elements.testDurationSlider.addEventListener("input", () => {
-      elements.testDurationValue.value = elements.testDurationSlider.value;
-      updateRemoteControlUi();
-    });
-  }
-
-  if (elements.testDurationValue) {
-    elements.testDurationValue.addEventListener("input", updateRemoteControlUi);
-  }
-
-  updateRemoteControlUi();
+function stopExperiment() {
+  stopExperimentClock();
+  setStatus("ok", "Experiment stopped");
 }
 
 async function refreshData() {
@@ -685,15 +766,28 @@ elements.saveSettings.addEventListener("click", saveSettings);
 elements.clearSettings.addEventListener("click", clearSettings);
 elements.refreshNow.addEventListener("click", refreshData);
 elements.sendSetpoint.addEventListener("click", sendSetpoint);
-elements.sendSystemEnable.addEventListener("click", sendSystemEnable);
+elements.sendToggleControls.addEventListener("click", sendToggleControls);
 elements.sendTestSettings.addEventListener("click", sendTestSettings);
 elements.sendAllControls.addEventListener("click", sendAllControls);
-bindRemoteControlUi();
+elements.startExperiment.addEventListener("click", startExperiment);
+elements.stopExperiment.addEventListener("click", stopExperiment);
+
+if (elements.setpointTempSlider && elements.setpointTempValue) {
+  syncControlPair(elements.setpointTempSlider, elements.setpointTempValue, elements.setpointDisplay, (value) => Number(value).toFixed(1));
+}
+
+if (elements.testNumberSlider && elements.testNumberValue) {
+  syncControlPair(elements.testNumberSlider, elements.testNumberValue, elements.testNumberDisplay, (value) => String(Math.round(Number(value))));
+}
+
+if (elements.testDurationSlider && elements.testDurationValue) {
+  syncControlPair(elements.testDurationSlider, elements.testDurationValue, elements.testDurationDisplay, (value) => String(Math.round(Number(value))));
+}
 
 loadSettings();
-updateRemoteControlUi();
 setStatus("idle", "Enter feed settings and connect");
 renderSummary([]);
 renderSensorCards([]);
 renderCharts([]);
 renderTable([]);
+updateElapsedTestDisplay();
