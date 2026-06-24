@@ -35,6 +35,16 @@
             Leave a sensor feed empty to hide it from the charts.
           </p>
         </div>
+        <button
+          type="button"
+          id="settings-toggle"
+          class="panel-toggle"
+          aria-expanded="false"
+          aria-controls="advanced-settings-fields"
+        >
+          <span>More settings</span>
+          <span class="panel-toggle-arrow" aria-hidden="true"></span>
+        </button>
       </div>
 
       <form id="settings-form" class="settings-grid">
@@ -46,53 +56,59 @@
         <label>
           AIO key
           <input id="aio-key" type="password" placeholder="aio_..." autocomplete="off" />
-          <span class="hint">Do not commit this key. It is only used in the browser request.</span>
         </label>
 
-        <label>
-          Temperature 1 feed
-          <input id="temperature1-feed" type="text" value="temperature1" />
-        </label>
+        <div id="advanced-settings-fields" class="advanced-settings" hidden>
+          <label>
+            Temperature 1 feed
+            <input id="temperature1-feed" type="text" value="temperature1" />
+          </label>
 
-        <label>
-          Light feed
-          <input id="light-feed" type="text" value="light" />
-        </label>
+          <label>
+            Light feed
+            <input id="light-feed" type="text" value="light" />
+          </label>
 
-        <label>
-          OD water feed
-          <input id="od-water-feed" type="text" value="od-water" />
-        </label>
+          <label>
+            OD water feed
+            <input id="od-water-feed" type="text" value="od-water" />
+          </label>
 
-        <label>
-          Active setpoint feed
-          <input id="setpoint-active-feed" type="text" value="setpoint-active" />
-        </label>
+          <label>
+            PWM duty feed
+            <input id="pwm-duty-feed" type="text" value="pwm-duty" />
+          </label>
 
-        <label>
-          Relay state feed
-          <input id="relay-state-feed" type="text" value="relay-state" />
-        </label>
+          <label>
+            Setpoint feed
+            <input id="setpoint-temp-feed" type="text" value="setpoint-temp" />
+          </label>
 
-        <label>
-          Test number feed
-          <input id="test-number-active-feed" type="text" value="test-number-active" />
-        </label>
+          <label>
+            System enable feed
+            <input id="system-enable-feed" type="text" value="system-enable" />
+          </label>
 
-        <label>
-          Elapsed test time feed
-          <input id="elapsed-test-s-feed" type="text" value="elapsed-test-s" />
-        </label>
+          <label>
+            Test number feed
+            <input id="test-number-feed" type="text" value="test-number" />
+          </label>
 
-        <label>
-          Number of points
-          <input id="limit" type="number" min="1" max="1000" value="120" />
-        </label>
+          <label>
+            Elapsed test time feed
+            <input id="elapsed-test-s-feed" type="text" value="elapsed-test-s" />
+          </label>
 
-        <label>
-          Refresh interval, seconds
-          <input id="refresh-seconds" type="number" min="1" max="600" value="15" />
-        </label>
+          <label>
+            Number of points
+            <input id="limit" type="number" min="1" max="1000" value="120" />
+          </label>
+
+          <label>
+            Refresh interval, seconds
+            <input id="refresh-seconds" type="number" min="1" max="600" value="15" />
+          </label>
+        </div>
 
         <div class="button-row">
           <button type="submit">Connect</button>
@@ -237,7 +253,7 @@
       </form>
 
       <p class="control-note">
-        Remote controls publish to <code>setpoint-temp</code>, <code>system-enable</code>, <code>test-number</code>, <code>test-duration-s</code>, and <code>system-reset</code>. Legacy controls <code>peltier-enable</code>, <code>auto-control</code>, and <code>manual-peltier</code> are not used.
+        Remote controls publish to <code>setpoint-temp</code>, <code>system-enable</code>, <code>test-number</code>, <code>test-duration-s</code>, and <code>system-reset</code>.
       </p>
     </section>
 

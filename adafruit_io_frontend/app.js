@@ -1,6 +1,7 @@
 const API_ROOT = "https://io.adafruit.com/api/v2";
 const STORAGE_KEY = "mussels_to_muscles_sensor_dashboard_settings";
 const SNAPSHOT_STORAGE_KEY = "mussels_to_muscles_sensor_dashboard_snapshots";
+const SETTINGS_PANEL_STATE_KEY = "mussels_to_muscles_sensor_dashboard_settings_panel_open";
 
 const SENSOR_DEFINITIONS = [
   {
@@ -14,7 +15,6 @@ const SENSOR_DEFINITIONS = [
     decimals: 2,
     color: "#C48C61",
   },
-
   {
     id: "light",
     label: "Light",
@@ -38,34 +38,45 @@ const SENSOR_DEFINITIONS = [
     color: "#38BDF8",
   },
   {
-    id: "setpoint-active",
+    id: "pwm-duty",
+    label: "PWM Duty Cycle",
+    unit: "%",
+    inputId: "pwm-duty-feed",
+    settingsKey: "pwmDutyFeed",
+    defaultFeed: "pwm-duty",
+    cssClass: "control",
+    decimals: 1,
+    color: "#38BDF8",
+  },
+  {
+    id: "setpoint-temp",
     label: "Setpoint",
     unit: "°C",
-    inputId: "setpoint-active-feed",
-    settingsKey: "setpointActiveFeed",
-    defaultFeed: "setpoint-active",
+    inputId: "setpoint-temp-feed",
+    settingsKey: "setpointTempFeed",
+    defaultFeed: "setpoint-temp",
     cssClass: "control",
     decimals: 1,
     color: "#34D399",
   },
   {
-    id: "relay-state",
-    label: "Relay State",
+    id: "system-enable",
+    label: "System Enable",
     unit: "",
-    inputId: "relay-state-feed",
-    settingsKey: "relayStateFeed",
-    defaultFeed: "relay-state",
+    inputId: "system-enable-feed",
+    settingsKey: "systemEnableFeed",
+    defaultFeed: "system-enable",
     cssClass: "control",
     decimals: 0,
     color: "#FB7185",
   },
   {
-    id: "test-number-active",
+    id: "test-number",
     label: "Test Number",
     unit: "",
-    inputId: "test-number-active-feed",
-    settingsKey: "testNumberActiveFeed",
-    defaultFeed: "test-number-active",
+    inputId: "test-number-feed",
+    settingsKey: "testNumberFeed",
+    defaultFeed: "test-number",
     cssClass: "control",
     decimals: 0,
     color: "#B9C2D0",
@@ -89,13 +100,12 @@ const CONTROL_FEEDS = {
   testNumber: "test-number",
   testDurationS: "test-duration-s",
   systemReset: "system-reset",
-  elapsedTestS: "elapsed-test-s",
 };
 
 const HIDDEN_TREND_SENSOR_IDS = new Set([
-  "setpoint-active",
-  "relay-state",
-  "test-number-active",
+  "setpoint-temp",
+  "system-enable",
+  "test-number",
   "elapsed-test-s",
 ]);
 
@@ -111,6 +121,8 @@ const elements = {
   form: document.getElementById("settings-form"),
   username: document.getElementById("username"),
   aioKey: document.getElementById("aio-key"),
+  settingsToggle: document.getElementById("settings-toggle"),
+  advancedSettings: document.getElementById("advanced-settings-fields"),
   limit: document.getElementById("limit"),
   refreshSeconds: document.getElementById("refresh-seconds"),
   saveSettings: document.getElementById("save-settings"),
@@ -197,6 +209,30 @@ function syncControlPair(rangeElement, numberElement, displayElement, formatDisp
 function updateSystemEnableDisplay() {
   if (!elements.systemEnableToggle || !elements.systemEnableDisplay) return;
   elements.systemEnableDisplay.textContent = elements.systemEnableToggle.checked ? "ON" : "OFF";
+}
+
+function setSettingsPanelExpanded(isExpanded) {
+  if (!elements.settingsToggle || !elements.advancedSettings) return;
+
+  elements.settingsToggle.setAttribute("aria-expanded", String(isExpanded));
+  elements.settingsToggle.querySelector("span")?.replaceChildren(isExpanded ? "Hide extra settings" : "More settings");
+  elements.advancedSettings.hidden = !isExpanded;
+  localStorage.setItem(SETTINGS_PANEL_STATE_KEY, JSON.stringify(isExpanded));
+}
+
+function loadSettingsPanelState() {
+  const raw = localStorage.getItem(SETTINGS_PANEL_STATE_KEY);
+  if (raw === null) {
+    setSettingsPanelExpanded(false);
+    return;
+  }
+
+  try {
+    setSettingsPanelExpanded(Boolean(JSON.parse(raw)));
+  } catch {
+    localStorage.removeItem(SETTINGS_PANEL_STATE_KEY);
+    setSettingsPanelExpanded(false);
+  }
 }
 
 function getSettingsFromForm() {
@@ -706,7 +742,7 @@ function drawChart(canvas, points, sensor) {
 
 async function publishElapsedTestTime(settings, elapsedSeconds) {
   if (!settings || !settings.username || !settings.aioKey) return;
-  await postFeedValue(settings, CONTROL_FEEDS.elapsedTestS, elapsedSeconds);
+  await postFeedValue(settings, "elapsed-test-s", elapsedSeconds);
 }
 
 function updateElapsedTestDisplay() {
@@ -783,7 +819,6 @@ function renderTable(results) {
     </tr>
   `).join("");
 }
-
 
 async function postFeedValue(settings, feedKey, value) {
   const url = new URL(`${API_ROOT}/${encodeURIComponent(settings.username)}/feeds/${encodeURIComponent(feedKey)}/data`);
@@ -919,14 +954,13 @@ async function refreshData() {
 
   setStatus("idle", "Loading feed data...");
 
-  const results = [];
-  for (const sensor of activeSensors) {
+  const results = await Promise.all(activeSensors.map(async (sensor) => {
     try {
-      results.push(await fetchFeedData(latestSettings, sensor));
+      return await fetchFeedData(latestSettings, sensor);
     } catch (error) {
-      results.push({ sensor, points: [], error });
+      return { sensor, points: [], error };
     }
-  }
+  }));
 
   renderSummary(results);
   renderSensorCards(results);
@@ -976,6 +1010,10 @@ elements.form.addEventListener("submit", (event) => {
 elements.saveSettings.addEventListener("click", saveSettings);
 elements.clearSettings.addEventListener("click", clearSettings);
 elements.refreshNow.addEventListener("click", refreshData);
+elements.settingsToggle?.addEventListener("click", () => {
+  const isExpanded = elements.settingsToggle.getAttribute("aria-expanded") === "true";
+  setSettingsPanelExpanded(!isExpanded);
+});
 document.getElementById("save-data-snapshot")?.addEventListener("click", () => {
   try {
     if (!latestResults.length || countLoadedPoints() === 0) {
@@ -1035,6 +1073,7 @@ if (elements.testDurationSlider && elements.testDurationValue) {
 }
 
 loadSettings();
+loadSettingsPanelState();
 updateSystemEnableDisplay();
 renderStoredSnapshots();
 setStatus("idle", "Enter feed settings and connect");
