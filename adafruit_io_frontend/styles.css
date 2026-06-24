@@ -530,6 +530,45 @@ td { color: var(--text); }
     linear-gradient(135deg, rgba(56, 189, 248, 0.10), transparent 45%);
 }
 
+/* Stable header layout: prevents title shift when status text changes */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  align-items: start;
+}
+
+.brand-block {
+  min-width: 0;
+}
+
+.status-card {
+  width: 360px;
+  justify-self: end;
+  justify-content: flex-start;
+}
+
+#connection-status {
+  display: inline-block;
+  min-width: 260px;
+}
+
+/* Mobile: stack normally */
+@media (max-width: 760px) {
+  .hero {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .status-card {
+    width: 100%;
+    justify-self: auto;
+  }
+
+  #connection-status {
+    min-width: 0;
+  }
+}
+
 .sensor-card.control .sensor-value {
   color: var(--success);
 }

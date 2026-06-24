@@ -34,7 +34,7 @@ const SENSOR_DEFINITIONS = [
     settingsKey: "odWaterFeed",
     defaultFeed: "od-water",
     cssClass: "light",
-    decimals: 3,
+    decimals: 2,
     color: "#38BDF8",
   },
   {
@@ -47,6 +47,17 @@ const SENSOR_DEFINITIONS = [
     cssClass: "control",
     decimals: 1,
     color: "#38BDF8",
+  },
+  {
+    id: "elapsed-test-s",
+    label: "Elapsed Test Time",
+    unit: "s",
+    inputId: "elapsed-test-s-feed",
+    settingsKey: "elapsedTestSFeed",
+    defaultFeed: "elapsed-test-s",
+    cssClass: "control",
+    decimals: 0,
+    color: "#6F7D95",
   },
   {
     id: "setpoint-temp",
@@ -82,15 +93,15 @@ const SENSOR_DEFINITIONS = [
     color: "#B9C2D0",
   },
   {
-    id: "elapsed-test-s",
-    label: "Elapsed Test Time",
+    id: "test-duration-s",
+    label: "Test Duration",
     unit: "s",
-    inputId: "elapsed-test-s-feed",
-    settingsKey: "elapsedTestSFeed",
-    defaultFeed: "elapsed-test-s",
+    inputId: "test-duration-s-feed",
+    settingsKey: "testDurationSFeed",
+    defaultFeed: "test-duration-s",
     cssClass: "control",
     decimals: 0,
-    color: "#6F7D95",
+    color: "#9CA3AF",
   },
 ];
 
@@ -107,6 +118,7 @@ const HIDDEN_TREND_SENSOR_IDS = new Set([
   "system-enable",
   "test-number",
   "elapsed-test-s",
+  "test-duration-s",
 ]);
 
 let refreshTimer = null;
@@ -116,6 +128,8 @@ let experimentStartTime = null;
 let experimentElapsedSeconds = 0;
 let experimentDurationSeconds = 0;
 let latestResults = [];
+let activeExperimentSession = null;
+let activeExperimentSampleKeys = new Set();
 
 const elements = {
   form: document.getElementById("settings-form"),
@@ -132,6 +146,8 @@ const elements = {
   dot: document.getElementById("connection-dot"),
   storedExperimentsList: document.getElementById("stored-experiments-list"),
   storageStatus: document.getElementById("storage-status"),
+  experimentName: document.getElementById("experiment-name"),
+  experimentNotes: document.getElementById("experiment-notes"),
   activeFeedCount: document.getElementById("active-feed-count"),
   latestUpdate: document.getElementById("latest-update"),
   totalPoints: document.getElementById("total-points"),
@@ -158,6 +174,11 @@ const elements = {
   startExperiment: document.getElementById("start-experiment"),
   stopExperiment: document.getElementById("stop-experiment"),
   sendSystemReset: document.getElementById("send-system-reset"),
+  saveDataSnapshot: document.getElementById("save-data-snapshot"),
+  exportLatestCsv: document.getElementById("export-latest-csv"),
+  exportLatestJson: document.getElementById("export-latest-json"),
+  exportStoredJson: document.getElementById("export-stored-json"),
+  clearStoredData: document.getElementById("clear-stored-data"),
 };
 
 function setStatus(type, message) {
@@ -171,6 +192,16 @@ function setStatus(type, message) {
 function clampNumber(value, min, max, fallback) {
   if (!Number.isFinite(value)) return fallback;
   return Math.min(max, Math.max(min, value));
+}
+
+function createId() {
+  return (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function")
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
 }
 
 function formatElapsedTime(totalSeconds) {
@@ -200,9 +231,21 @@ function setControlPairValue(rangeElement, numberElement, displayElement, rawVal
 
 function syncControlPair(rangeElement, numberElement, displayElement, formatDisplay = (value) => value) {
   const applyValue = (rawValue) => setControlPairValue(rangeElement, numberElement, displayElement, rawValue, formatDisplay);
+  const syncNumberInput = () => {
+    const rawValue = numberElement.value.trim();
+    if (!rawValue) return;
+
+    const parsedValue = Number(rawValue);
+    if (!Number.isFinite(parsedValue)) return;
+
+    rangeElement.value = String(parsedValue);
+    if (displayElement) displayElement.textContent = formatDisplay(parsedValue);
+  };
 
   rangeElement.addEventListener("input", () => applyValue(rangeElement.value));
-  numberElement.addEventListener("input", () => applyValue(numberElement.value));
+  numberElement.addEventListener("input", syncNumberInput);
+  numberElement.addEventListener("change", () => applyValue(numberElement.value));
+  numberElement.addEventListener("blur", () => applyValue(numberElement.value));
   applyValue(rangeElement.value);
 }
 
@@ -306,6 +349,14 @@ function getActiveSensors(settings) {
     .filter((sensor) => sensor.feedKey && sensor.feedKey.length > 0);
 }
 
+function getExperimentName() {
+  return elements.experimentName?.value.trim() || "Untitled experiment";
+}
+
+function getExperimentNotes() {
+  return elements.experimentNotes?.value.trim() || "";
+}
+
 function saveSettings() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(getSettingsFromForm()));
   setStatus("ok", "Settings saved locally");
@@ -333,6 +384,25 @@ function clearSettings() {
   setStatus("idle", "Settings cleared");
 }
 
+function transformSensorValue(sensor, rawValue) {
+  if (!Number.isFinite(rawValue)) {
+    return rawValue;
+  }
+
+  if (sensor.id === "pwm-duty") {
+    const percentValue = rawValue <= 1 && rawValue >= 0
+      ? rawValue * 100
+      : rawValue;
+    return clampNumber(percentValue, 0, 100, 0);
+  }
+
+  if (sensor.id === "od-water") {
+    return (-0.000307 * rawValue) + 1545.2;
+  }
+
+  return rawValue;
+}
+
 async function fetchFeedData(settings, sensor) {
   const url = new URL(`${API_ROOT}/${encodeURIComponent(settings.username)}/feeds/${encodeURIComponent(sensor.feedKey)}/data`);
   url.searchParams.set("limit", String(settings.limit));
@@ -350,12 +420,17 @@ async function fetchFeedData(settings, sensor) {
 
   const data = await response.json();
   const points = data
-    .map((point) => ({
-      value: Number(point.value),
-      createdAt: point.created_at,
-      date: new Date(point.created_at),
-    }))
-    .filter((point) => Number.isFinite(point.value) && !Number.isNaN(point.date.getTime()))
+    .map((point) => {
+      const rawValue = Number(point.value);
+      return {
+        value: transformSensorValue(sensor, rawValue),
+        rawValue,
+        createdAt: point.created_at,
+        date: new Date(point.created_at),
+      };
+    })
+    .filter((point) => Number.isFinite(point.rawValue) && Number.isFinite(point.value) && !Number.isNaN(point.date.getTime()))
+    .map(({ rawValue: _rawValue, ...point }) => point)
     .sort((a, b) => a.date - b.date);
 
   return { sensor, points, error: null };
@@ -404,6 +479,124 @@ function calculateStats(points) {
   };
 }
 
+function buildControlSnapshot() {
+  return {
+    setpointTemp: Number(elements.setpointTempValue?.value ?? 18),
+    systemEnable: Boolean(elements.systemEnableToggle?.checked),
+    testNumber: Math.round(Number(elements.testNumberValue?.value ?? 1)),
+    testDurationS: Math.round(Number(elements.testDurationValue?.value ?? 600)),
+    elapsedTestS: experimentElapsedSeconds,
+    capturedAt: new Date().toISOString(),
+  };
+}
+
+function buildSessionSettings() {
+  const settings = getSettingsFromForm();
+  const safeSettings = {
+    username: settings.username,
+    limit: settings.limit,
+    refreshSeconds: settings.refreshSeconds,
+    feeds: {},
+  };
+
+  for (const sensor of SENSOR_DEFINITIONS) {
+    const configuredFeedKey = settings[sensor.settingsKey] || sensor.defaultFeed;
+    safeSettings.feeds[configuredFeedKey] = {
+      sensorId: sensor.id,
+      label: sensor.label,
+      unit: sensor.unit,
+      feedKey: configuredFeedKey,
+    };
+  }
+
+  return safeSettings;
+}
+
+function createActiveExperimentSession() {
+  return {
+    id: createId(),
+    experimentName: getExperimentName(),
+    notes: getExperimentNotes(),
+    startedAt: new Date().toISOString(),
+    stoppedAt: null,
+    durationSeconds: 0,
+    running: true,
+    settings: buildSessionSettings(),
+    controlValues: {
+      started: buildControlSnapshot(),
+      stopped: null,
+    },
+    samples: {},
+  };
+}
+
+function getSessionDurationSeconds(session) {
+  if (!session) return 0;
+  if (session.stoppedAt) return clampNumber(Number(session.durationSeconds), 0, 86400 * 365, 0);
+
+  const startedAtMs = Date.parse(session.startedAt);
+  if (Number.isNaN(startedAtMs)) return clampNumber(Number(session.durationSeconds), 0, 86400 * 365, 0);
+
+  return Math.max(clampNumber(Number(session.durationSeconds), 0, 86400 * 365, 0), Math.floor((Date.now() - startedAtMs) / 1000));
+}
+
+function getSessionSampleCount(session) {
+  if (!session?.samples) return 0;
+  return Object.values(session.samples).reduce((sum, sampleGroup) => sum + (Array.isArray(sampleGroup.points) ? sampleGroup.points.length : 0), 0);
+}
+
+function normalizeStoredSession(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") {
+    return null;
+  }
+
+  if (snapshot.samples && typeof snapshot.samples === "object") {
+    return {
+      ...snapshot,
+      experimentName: snapshot.experimentName || snapshot.name || "Untitled experiment",
+      notes: snapshot.notes || "",
+      running: Boolean(snapshot.running && !snapshot.stoppedAt),
+      durationSeconds: getSessionDurationSeconds(snapshot),
+    };
+  }
+
+  if (Array.isArray(snapshot.results)) {
+    const samples = {};
+
+    for (const result of snapshot.results) {
+      if (!result?.feedKey) continue;
+      samples[result.feedKey] = {
+        feedKey: result.feedKey,
+        label: result.label || result.feedKey,
+        unit: result.unit || "",
+        sensorId: result.sensorId || result.feedKey,
+        points: Array.isArray(result.points)
+          ? result.points.map((point) => ({
+            timestamp: point.createdAt,
+            value: point.value,
+          }))
+          : [],
+      };
+    }
+
+    return {
+      id: snapshot.id || createId(),
+      experimentName: snapshot.name || snapshot.experimentName || "Untitled experiment",
+      notes: snapshot.notes || "",
+      startedAt: snapshot.startedAt || snapshot.savedAt || new Date().toISOString(),
+      stoppedAt: snapshot.stoppedAt || snapshot.savedAt || null,
+      durationSeconds: clampNumber(Number(snapshot.durationSeconds), 0, 86400 * 365, 0),
+      running: false,
+      settings: snapshot.settings || {},
+      controlValues: snapshot.controlValues || {},
+      samples,
+      savedAt: snapshot.savedAt || null,
+    };
+  }
+
+  return null;
+}
+
 function getStoredSnapshots() {
   const raw = localStorage.getItem(SNAPSHOT_STORAGE_KEY);
 
@@ -413,11 +606,39 @@ function getStoredSnapshots() {
 
   try {
     const snapshots = JSON.parse(raw);
-    return Array.isArray(snapshots) ? snapshots : [];
+    if (!Array.isArray(snapshots)) return [];
+    return snapshots.map(normalizeStoredSession).filter(Boolean);
   } catch {
     localStorage.removeItem(SNAPSHOT_STORAGE_KEY);
     return [];
   }
+}
+
+function updateStorageStatus() {
+  if (!elements.storageStatus) return;
+
+  if (activeExperimentSession && !activeExperimentSession.stoppedAt) {
+    const sampleCount = getSessionSampleCount(activeExperimentSession);
+    elements.storageStatus.textContent = `Recording in progress · ${activeExperimentSession.experimentName} · ${sampleCount} sample${sampleCount === 1 ? "" : "s"} captured so far.`;
+    return;
+  }
+
+  if (activeExperimentSession?.stoppedAt) {
+    const sampleCount = getSessionSampleCount(activeExperimentSession);
+    elements.storageStatus.textContent = `Stopped experiment ready to save/export · ${activeExperimentSession.experimentName} · ${sampleCount} sample${sampleCount === 1 ? "" : "s"} captured.`;
+    return;
+  }
+
+  const snapshots = getStoredSnapshots();
+  if (!snapshots.length) {
+    elements.storageStatus.textContent = "No local experiment snapshots saved yet.";
+    return;
+  }
+
+  const latestSnapshot = snapshots[0];
+  const sampleCount = getSessionSampleCount(latestSnapshot);
+  const dateLabel = latestSnapshot.savedAt || latestSnapshot.stoppedAt || latestSnapshot.startedAt;
+  elements.storageStatus.textContent = `Stored experiments · ${latestSnapshot.experimentName} · ${formatSnapshotDate(new Date(dateLabel))} · ${sampleCount} sample${sampleCount === 1 ? "" : "s"}`;
 }
 
 function setStoredSnapshots(snapshots) {
@@ -425,27 +646,8 @@ function setStoredSnapshots(snapshots) {
   renderStoredSnapshots();
 }
 
-function getLatestSuccessfulResults() {
-  return latestResults.filter((result) => !result.error && result.points.length > 0);
-}
-
-function countLoadedPoints(results = latestResults) {
-  return results.reduce((sum, result) => sum + (result.error ? 0 : result.points.length), 0);
-}
-
-function buildExportRows(results = latestResults) {
-  return results
-    .filter((result) => !result.error && result.points.length > 0)
-    .flatMap((result) => result.points.map((point) => ({
-      sensor: result.sensor.label,
-      feed: result.sensor.feedKey,
-      time: point.createdAt,
-      value: point.value,
-    })));
-}
-
 function renderStoredSnapshots() {
-  if (!elements.storedExperimentsList || !elements.storageStatus) {
+  if (!elements.storedExperimentsList) {
     return;
   }
 
@@ -453,20 +655,22 @@ function renderStoredSnapshots() {
 
   if (!snapshots.length) {
     elements.storedExperimentsList.innerHTML = "";
-    elements.storageStatus.textContent = "No local experiment snapshots saved yet.";
+    updateStorageStatus();
     return;
   }
 
-  const latestSnapshot = snapshots[0];
-  elements.storageStatus.textContent = `Stored experiments · ${latestSnapshot.name} · ${formatSnapshotDate(new Date(latestSnapshot.savedAt))} · ${latestSnapshot.pointCount} data point${latestSnapshot.pointCount === 1 ? "" : "s"}`;
-  elements.storedExperimentsList.innerHTML = snapshots.slice(0, 3).map((snapshot) => `
-    <li class="stored-experiments-item">
-      <span class="stored-experiments-name">${escapeHtml(snapshot.name)}</span>
-      <span class="stored-experiments-meta">${formatSnapshotDate(new Date(snapshot.savedAt))}</span>
-      <span class="stored-experiments-meta">${snapshot.pointCount} data point${snapshot.pointCount === 1 ? "" : "s"}</span>
-      ${snapshot.notes ? `<span class="stored-experiments-notes">${escapeHtml(snapshot.notes)}</span>` : ""}
-    </li>
-  `).join("");
+  elements.storedExperimentsList.innerHTML = snapshots.slice(0, 3).map((snapshot) => {
+    const sampleCount = getSessionSampleCount(snapshot);
+    const dateLabel = snapshot.savedAt || snapshot.stoppedAt || snapshot.startedAt;
+    return `
+      <li class="stored-experiments-item">
+        <span class="stored-experiments-name">${escapeHtml(snapshot.experimentName)}</span>
+        <span class="stored-experiments-meta">${formatSnapshotDate(new Date(dateLabel))}</span>
+        <span class="stored-experiments-meta">${sampleCount} sample${sampleCount === 1 ? "" : "s"}</span>
+        ${snapshot.notes ? `<span class="stored-experiments-notes">${escapeHtml(snapshot.notes)}</span>` : ""}
+      </li>
+    `;
+  }).join("");
 
   if (snapshots.length > 3) {
     const extraCount = snapshots.length - 3;
@@ -474,32 +678,104 @@ function renderStoredSnapshots() {
       <li class="stored-experiments-item stored-experiments-more">+${extraCount} more saved snapshot${extraCount === 1 ? "" : "s"}</li>
     `);
   }
+
+  updateStorageStatus();
 }
 
-function createSnapshotRecord(results = latestResults) {
-  const experimentName = document.getElementById("experiment-name")?.value.trim() || "Untitled experiment";
-  const experimentNotes = document.getElementById("experiment-notes")?.value.trim() || "";
-  const successfulResults = getLatestSuccessfulResults();
+function updateActiveExperimentMetadata() {
+  if (!activeExperimentSession) return;
+  activeExperimentSession.experimentName = getExperimentName();
+  activeExperimentSession.notes = getExperimentNotes();
+  activeExperimentSession.durationSeconds = getSessionDurationSeconds(activeExperimentSession);
+}
 
-  return {
-    id: (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function")
-      ? globalThis.crypto.randomUUID()
-      : `${Date.now()}`,
-    name: experimentName,
-    notes: experimentNotes,
-    savedAt: new Date().toISOString(),
-    pointCount: countLoadedPoints(results),
-    feedCount: successfulResults.length,
-    results: successfulResults.map((result) => ({
-      sensorId: result.sensor.id,
-      label: result.sensor.label,
-      feedKey: result.sensor.feedKey,
-      points: result.points.map((point) => ({
+function serializeSession(session, extra = {}) {
+  return cloneJson({
+    ...session,
+    experimentName: session.experimentName || "Untitled experiment",
+    notes: session.notes || "",
+    running: Boolean(!session.stoppedAt),
+    durationSeconds: getSessionDurationSeconds(session),
+    settings: session.settings || {},
+    controlValues: session.controlValues || {},
+    samples: session.samples || {},
+    ...extra,
+  });
+}
+
+function getLatestSavedSession() {
+  return getStoredSnapshots()[0] || null;
+}
+
+function getSessionForExport() {
+  if (activeExperimentSession?.stoppedAt) {
+    updateActiveExperimentMetadata();
+    return serializeSession(activeExperimentSession);
+  }
+
+  const latestSaved = getLatestSavedSession();
+  if (latestSaved) {
+    return serializeSession(latestSaved);
+  }
+
+  return null;
+}
+
+function addResultsToActiveExperimentSession(results) {
+  if (!activeExperimentSession || activeExperimentSession.stoppedAt) {
+    return;
+  }
+
+  const startedAtMs = Date.parse(activeExperimentSession.startedAt);
+  const stoppedAtMs = activeExperimentSession.stoppedAt ? Date.parse(activeExperimentSession.stoppedAt) : Number.POSITIVE_INFINITY;
+
+  for (const result of results) {
+    if (result.error || !result.points.length) continue;
+
+    const feedKey = result.sensor.feedKey;
+    if (!activeExperimentSession.samples[feedKey]) {
+      activeExperimentSession.samples[feedKey] = {
+        feedKey,
+        label: result.sensor.label,
+        unit: result.sensor.unit,
+        sensorId: result.sensor.id,
+        points: [],
+      };
+    }
+
+    for (const point of result.points) {
+      const pointMs = point.date.getTime();
+      if (pointMs < startedAtMs) continue;
+      if (pointMs > stoppedAtMs) continue;
+
+      const sampleKey = `${feedKey}|${point.createdAt}|${point.value}`;
+      if (activeExperimentSampleKeys.has(sampleKey)) continue;
+
+      activeExperimentSession.samples[feedKey].points.push({
+        timestamp: point.createdAt,
         value: point.value,
-        createdAt: point.createdAt,
-      })),
-    })),
-  };
+      });
+      activeExperimentSampleKeys.add(sampleKey);
+    }
+  }
+
+  activeExperimentSession.durationSeconds = getSessionDurationSeconds(activeExperimentSession);
+  updateStorageStatus();
+}
+
+function finalizeActiveExperimentSession() {
+  if (!activeExperimentSession || activeExperimentSession.stoppedAt) {
+    return activeExperimentSession;
+  }
+
+  updateActiveExperimentMetadata();
+  activeExperimentSession.stoppedAt = new Date().toISOString();
+  activeExperimentSession.durationSeconds = experimentElapsedSeconds;
+  activeExperimentSession.running = false;
+  activeExperimentSession.controlValues.stopped = buildControlSnapshot();
+  updateStorageStatus();
+
+  return activeExperimentSession;
 }
 
 function downloadTextFile(filename, content, type) {
@@ -514,38 +790,57 @@ function downloadTextFile(filename, content, type) {
   URL.revokeObjectURL(url);
 }
 
-function getExportFileStem() {
-  const value = document.getElementById("experiment-name")?.value.trim();
-  return value ? value.replace(/[^a-z0-9-_]+/gi, "_") : "experiment";
+function getExportFileStem(session = null) {
+  const sourceValue = session?.experimentName || getExperimentName();
+  return sourceValue ? sourceValue.replace(/[^a-z0-9-_]+/gi, "_") : "experiment";
+}
+
+function buildCsvRowsFromSession(session) {
+  return Object.values(session.samples || {})
+    .flatMap((sampleGroup) => sampleGroup.points.map((point) => ({
+      experiment_name: session.experimentName || "",
+      started_at: session.startedAt || "",
+      stopped_at: session.stoppedAt || "",
+      feed: sampleGroup.feedKey,
+      label: sampleGroup.label || "",
+      unit: sampleGroup.unit || "",
+      timestamp: point.timestamp,
+      value: point.value,
+    })))
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 }
 
 function exportLatestCsv() {
-  const rows = buildExportRows();
+  const session = getSessionForExport();
 
-  if (!rows.length) {
-    throw new Error("No loaded data is available to export");
+  if (!session) {
+    throw new Error("Stop an experiment or save one locally before exporting");
   }
 
-  const header = ["sensor", "feed", "time", "value"];
-  const lines = [header.join(","), ...rows.map((row) => [row.sensor, row.feed, row.time, row.value].map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))];
-  downloadTextFile(`${getExportFileStem()}-latest.csv`, `${lines.join("\n")}\n`, "text/csv;charset=utf-8");
+  const rows = buildCsvRowsFromSession(session);
+  if (!rows.length) {
+    throw new Error("No recorded session samples are available to export");
+  }
+
+  const header = ["experiment_name", "started_at", "stopped_at", "feed", "label", "unit", "timestamp", "value"];
+  const lines = [
+    header.join(","),
+    ...rows.map((row) => header.map((column) => `"${String(row[column] ?? "").replace(/"/g, '""')}"`).join(",")),
+  ];
+
+  downloadTextFile(`${getExportFileStem(session)}-latest.csv`, `${lines.join("\n")}\n`, "text/csv;charset=utf-8");
 }
 
 function exportLatestJson() {
-  const rows = buildExportRows();
+  const session = getSessionForExport();
 
-  if (!rows.length) {
-    throw new Error("No loaded data is available to export");
+  if (!session) {
+    throw new Error("Stop an experiment or save one locally before exporting");
   }
 
   downloadTextFile(
-    `${getExportFileStem()}-latest.json`,
-    JSON.stringify({
-      exportedAt: new Date().toISOString(),
-      experimentName: document.getElementById("experiment-name")?.value.trim() || "",
-      notes: document.getElementById("experiment-notes")?.value.trim() || "",
-      rows,
-    }, null, 2),
+    `${getExportFileStem(session)}-latest.json`,
+    JSON.stringify(session, null, 2),
     "application/json;charset=utf-8",
   );
 }
@@ -561,23 +856,38 @@ function exportStoredSnapshots() {
     `${getExportFileStem()}-stored-snapshots.json`,
     JSON.stringify({
       exportedAt: new Date().toISOString(),
-      snapshots,
+      snapshots: snapshots.map((snapshot) => serializeSession(snapshot)),
     }, null, 2),
     "application/json;charset=utf-8",
   );
 }
 
 function saveDataSnapshot() {
-  const snapshot = createSnapshotRecord();
+  if (activeExperimentSession && !activeExperimentSession.stoppedAt) {
+    throw new Error("Stop the experiment before saving a snapshot");
+  }
+
+  if (!activeExperimentSession?.stoppedAt) {
+    throw new Error("No stopped experiment is ready to save");
+  }
+
+  updateActiveExperimentMetadata();
+  const snapshot = serializeSession(activeExperimentSession, {
+    savedAt: new Date().toISOString(),
+    running: false,
+  });
+
   const snapshots = [snapshot, ...getStoredSnapshots()];
   setStoredSnapshots(snapshots);
-  setStatus("ok", `Saved snapshot: ${snapshot.name} · ${formatSnapshotDate(new Date(snapshot.savedAt))} · ${snapshot.pointCount} data points`);
+
+  const sampleCount = getSessionSampleCount(snapshot);
+  setStatus("ok", `Saved snapshot: ${snapshot.experimentName} · ${sampleCount} sample${sampleCount === 1 ? "" : "s"}`);
 }
 
 function clearStoredSnapshots() {
   localStorage.removeItem(SNAPSHOT_STORAGE_KEY);
   renderStoredSnapshots();
-  setStatus("idle", "Stored experiment snapshots cleared");
+  setStatus("idle", "Stored experiment sessions cleared");
 }
 
 function renderSummary(results) {
@@ -688,8 +998,8 @@ function drawChart(canvas, points, sensor) {
   }
 
   const values = points.map((point) => point.value);
-  const minValue = Math.min(...values);
-  const maxValue = Math.max(...values);
+  const minValue = sensor.id === "pwm-duty" ? 0 : Math.min(...values);
+  const maxValue = sensor.id === "pwm-duty" ? 100 : Math.max(...values);
   const range = maxValue - minValue || 1;
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
@@ -760,6 +1070,10 @@ function updateElapsedTestDisplay() {
 
 async function tickExperimentClock() {
   const elapsedSeconds = updateElapsedTestDisplay();
+  if (activeExperimentSession && !activeExperimentSession.stoppedAt) {
+    activeExperimentSession.durationSeconds = elapsedSeconds;
+    updateStorageStatus();
+  }
 
   try {
     await publishElapsedTestTime(latestSettings, elapsedSeconds);
@@ -768,8 +1082,8 @@ async function tickExperimentClock() {
   }
 
   if (Number.isFinite(experimentDurationSeconds) && elapsedSeconds >= experimentDurationSeconds) {
-    stopExperimentClock();
-    setStatus("ok", `Experiment completed at ${formatElapsedTime(elapsedSeconds)}`);
+    stopExperiment();
+    setStatus("ok", `Experiment completed at ${formatElapsedTime(elapsedSeconds)} and is ready to save/export`);
   }
 }
 
@@ -934,13 +1248,23 @@ async function sendAllControls() {
 
 function startExperiment() {
   experimentDurationSeconds = clampNumber(Number(elements.testDurationValue.value), 0, 86400, 600);
+  latestSettings = getSettingsFromForm();
+  activeExperimentSession = createActiveExperimentSession();
+  activeExperimentSampleKeys = new Set();
   startExperimentClock();
-  setStatus("ok", "Experiment started");
+  updateStorageStatus();
+  setStatus("ok", "Experiment recording started");
 }
 
 function stopExperiment() {
   stopExperimentClock();
-  setStatus("ok", "Experiment stopped");
+  const session = finalizeActiveExperimentSession();
+
+  if (session?.stoppedAt) {
+    setStatus("ok", "Experiment stopped and ready to save/export");
+  } else {
+    setStatus("ok", "Experiment stopped");
+  }
 }
 
 async function refreshData() {
@@ -962,17 +1286,19 @@ async function refreshData() {
     }
   }));
 
-  renderSummary(results);
-  renderSensorCards(results);
-  renderCharts(results);
-  renderTable(results);
   latestResults = results;
+
+  addResultsToActiveExperimentSession(results);
+  renderSummary(results);
+  renderCharts(results);
+  renderSensorCards(results);
+  renderTable(results);
 
   const errors = results.filter((result) => result.error).length;
   if (errors > 0) {
     setStatus("error", `${errors} feed(s) failed. Check feed keys or AIO key.`);
   } else {
-    setStatus("ok", `Connected to ${results.length} feed(s)`);
+    setStatus("ok", `Connected to ${results.length} numeric feed(s)`);
   }
 }
 
@@ -1014,42 +1340,38 @@ elements.settingsToggle?.addEventListener("click", () => {
   const isExpanded = elements.settingsToggle.getAttribute("aria-expanded") === "true";
   setSettingsPanelExpanded(!isExpanded);
 });
-document.getElementById("save-data-snapshot")?.addEventListener("click", () => {
+elements.saveDataSnapshot?.addEventListener("click", () => {
   try {
-    if (!latestResults.length || countLoadedPoints() === 0) {
-      throw new Error("Load data before saving a snapshot");
-    }
-
     saveDataSnapshot();
   } catch (error) {
     setStatus("error", error.message || String(error));
   }
 });
-document.getElementById("export-latest-csv")?.addEventListener("click", () => {
+elements.exportLatestCsv?.addEventListener("click", () => {
   try {
     exportLatestCsv();
-    setStatus("ok", "Latest data exported as CSV");
+    setStatus("ok", "Experiment data exported as CSV");
   } catch (error) {
     setStatus("error", error.message || String(error));
   }
 });
-document.getElementById("export-latest-json")?.addEventListener("click", () => {
+elements.exportLatestJson?.addEventListener("click", () => {
   try {
     exportLatestJson();
-    setStatus("ok", "Latest data exported as JSON");
+    setStatus("ok", "Experiment data exported as JSON");
   } catch (error) {
     setStatus("error", error.message || String(error));
   }
 });
-document.getElementById("export-stored-json")?.addEventListener("click", () => {
+elements.exportStoredJson?.addEventListener("click", () => {
   try {
     exportStoredSnapshots();
-    setStatus("ok", "Stored snapshots exported as JSON");
+    setStatus("ok", "Stored experiment sessions exported as JSON");
   } catch (error) {
     setStatus("error", error.message || String(error));
   }
 });
-document.getElementById("clear-stored-data")?.addEventListener("click", clearStoredSnapshots);
+elements.clearStoredData?.addEventListener("click", clearStoredSnapshots);
 elements.sendSetpoint.addEventListener("click", sendSetpoint);
 if (elements.systemEnableToggle) elements.systemEnableToggle.addEventListener("change", updateSystemEnableDisplay);
 if (elements.sendSystemEnable) elements.sendSystemEnable.addEventListener("click", sendSystemEnable);
@@ -1078,7 +1400,7 @@ updateSystemEnableDisplay();
 renderStoredSnapshots();
 setStatus("idle", "Enter feed settings and connect");
 renderSummary([]);
-renderSensorCards([]);
 renderCharts([]);
+renderSensorCards([]);
 renderTable([]);
 updateElapsedTestDisplay();
