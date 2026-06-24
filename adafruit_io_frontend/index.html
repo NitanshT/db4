@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Mussels to Muscles · Sensor Dashboard</title>
+  <title>Muscles to Mussels · Sensor Dashboard</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -13,7 +13,7 @@
         <img class="logo" src="assets/mussels_to_muscles.png" alt="Mussels to Muscles logo" />
         <div>
           <p class="eyebrow"></p>
-          <h1>Mussels to Muscles</h1>
+          <h1>Muscles to Mussels</h1>
           <p class="subtitle">
             Live web dashboard for thermistor and light-sensor data from the autonomous mussel-system prototype.
           </p>
@@ -52,11 +52,6 @@
         <label>
           Temperature 1 feed
           <input id="temperature1-feed" type="text" value="temperature1" />
-        </label>
-
-        <label>
-          Temperature 2 feed
-          <input id="temperature2-feed" type="text" value="temperature2" />
         </label>
 
         <label>
@@ -155,19 +150,15 @@
           <article class="control-block">
             <div class="control-block-head">
               <div>
-                <p class="control-label">System enable</p>
-                <h3 id="system-enable-display">Running</h3>
+                <p class="control-label">System reset</p>
+                <h3>Reset</h3>
               </div>
-              <span class="feed-pill">system-enable</span>
+              <span class="feed-pill">system-reset</span>
             </div>
 
-            <label class="switch-line">
-              <input id="system-enable-toggle" type="checkbox" checked />
-              <span class="switch-ui"></span>
-              <span class="switch-copy">ON allows the PI control loop to operate. OFF should force all actuators to zero on the ESP32.</span>
-            </label>
+            <p class="control-note compact">Sends a reset signal to the ESP32 to restart all systems and clear state.</p>
 
-            <button type="button" id="send-system-enable" class="secondary block-button">Send system state</button>
+            <button type="button" id="send-system-reset" class="danger-button block-button">Reset ESP32</button>
           </article>
         </div>
 

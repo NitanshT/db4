@@ -13,17 +13,7 @@ const SENSOR_DEFINITIONS = [
     decimals: 2,
     color: "#C48C61",
   },
-  {
-    id: "temperature2",
-    label: "Temp 2 Algae",
-    unit: "°C",
-    inputId: "temperature2-feed",
-    settingsKey: "temperature2Feed",
-    defaultFeed: "temperature2",
-    cssClass: "temperature",
-    decimals: 2,
-    color: "#8B5D42",
-  },
+
   {
     id: "light",
     label: "Light",
@@ -99,6 +89,7 @@ const CONTROL_FEEDS = {
   manualPeltier: "manual-peltier",
   testNumber: "test-number",
   testDurationS: "test-duration-s",
+  systemReset: "system-reset",
 };
 
 const HIDDEN_TREND_SENSOR_IDS = new Set([
@@ -135,7 +126,6 @@ const elements = {
   setpointTempSlider: document.getElementById("setpoint-temp-slider"),
   setpointTempValue: document.getElementById("setpoint-temp-value"),
   setpointDisplay: document.getElementById("setpoint-display"),
-  systemEnableDisplay: document.getElementById("system-enable-display"),
   peltierEnableToggle: document.getElementById("peltier-enable-toggle"),
   autoControlToggle: document.getElementById("auto-control-toggle"),
   manualPeltierToggle: document.getElementById("manual-peltier-toggle"),
@@ -152,6 +142,7 @@ const elements = {
   sendAllControls: document.getElementById("send-all-controls"),
   startExperiment: document.getElementById("start-experiment"),
   stopExperiment: document.getElementById("stop-experiment"),
+  sendSystemReset: document.getElementById("send-system-reset"),
 };
 
 function setStatus(type, message) {
@@ -658,6 +649,16 @@ async function sendToggleControls() {
   }
 }
 
+async function sendSystemReset() {
+  try {
+    const settings = getControlSettings();
+    await postFeedValue(settings, CONTROL_FEEDS.systemReset, 1);
+    setStatus("ok", "ESP32 reset command sent");
+  } catch (error) {
+    setStatus("error", error.message || String(error));
+  }
+}
+
 async function sendTestSettings() {
   try {
     const settings = getControlSettings();
@@ -771,6 +772,7 @@ elements.sendTestSettings.addEventListener("click", sendTestSettings);
 elements.sendAllControls.addEventListener("click", sendAllControls);
 elements.startExperiment.addEventListener("click", startExperiment);
 elements.stopExperiment.addEventListener("click", stopExperiment);
+elements.sendSystemReset.addEventListener("click", sendSystemReset);
 
 if (elements.setpointTempSlider && elements.setpointTempValue) {
   syncControlPair(elements.setpointTempSlider, elements.setpointTempValue, elements.setpointDisplay, (value) => Number(value).toFixed(1));
