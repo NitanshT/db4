@@ -84,12 +84,11 @@ const SENSOR_DEFINITIONS = [
 
 const CONTROL_FEEDS = {
   setpointTemp: "setpoint-temp",
-  peltierEnable: "peltier-enable",
-  autoControl: "auto-control",
-  manualPeltier: "manual-peltier",
+  systemEnable: "system-enable",
   testNumber: "test-number",
   testDurationS: "test-duration-s",
   systemReset: "system-reset",
+  elapsedTestS: "elapsed-test-s",
 };
 
 const HIDDEN_TREND_SENSOR_IDS = new Set([
@@ -126,9 +125,9 @@ const elements = {
   setpointTempSlider: document.getElementById("setpoint-temp-slider"),
   setpointTempValue: document.getElementById("setpoint-temp-value"),
   setpointDisplay: document.getElementById("setpoint-display"),
-  peltierEnableToggle: document.getElementById("peltier-enable-toggle"),
-  autoControlToggle: document.getElementById("auto-control-toggle"),
-  manualPeltierToggle: document.getElementById("manual-peltier-toggle"),
+  systemEnableToggle: document.getElementById("system-enable-toggle"),
+  systemEnableDisplay: document.getElementById("system-enable-display"),
+  sendSystemEnable: document.getElementById("send-system-enable"),
   testNumberSlider: document.getElementById("test-number-slider"),
   testNumberValue: document.getElementById("test-number-value"),
   testNumberDisplay: document.getElementById("test-number-display"),
@@ -191,6 +190,11 @@ function syncControlPair(rangeElement, numberElement, displayElement, formatDisp
   applyValue(rangeElement.value);
 }
 
+function updateSystemEnableDisplay() {
+  if (!elements.systemEnableToggle || !elements.systemEnableDisplay) return;
+  elements.systemEnableDisplay.textContent = elements.systemEnableToggle.checked ? "ON" : "OFF";
+}
+
 function getSettingsFromForm() {
   const settings = {
     username: elements.username.value.trim(),
@@ -201,6 +205,10 @@ function getSettingsFromForm() {
 
   for (const sensor of SENSOR_DEFINITIONS) {
     settings[sensor.settingsKey] = document.getElementById(sensor.inputId).value.trim();
+  }
+
+  if (elements.systemEnableToggle) {
+    settings.systemEnable = elements.systemEnableToggle.checked;
   }
 
   return settings;
@@ -214,6 +222,11 @@ function setFormFromSettings(settings = {}) {
 
   for (const sensor of SENSOR_DEFINITIONS) {
     document.getElementById(sensor.inputId).value = settings[sensor.settingsKey] ?? sensor.defaultFeed;
+  }
+
+  if (elements.systemEnableToggle) {
+    elements.systemEnableToggle.checked = Boolean(settings.systemEnable ?? false);
+    updateSystemEnableDisplay();
   }
 
   if (elements.setpointTempSlider && elements.setpointTempValue) {
@@ -635,18 +648,26 @@ async function sendSetpoint() {
   }
 }
 
-async function sendToggleControls() {
+async function sendSystemEnable() {
   try {
     const settings = getControlSettings();
 
-    await postFeedValue(settings, CONTROL_FEEDS.peltierEnable, elements.peltierEnableToggle.checked ? 1 : 0);
-    await postFeedValue(settings, CONTROL_FEEDS.autoControl, elements.autoControlToggle.checked ? 1 : 0);
-    await postFeedValue(settings, CONTROL_FEEDS.manualPeltier, elements.manualPeltierToggle.checked ? 1 : 0);
+    if (!elements.systemEnableToggle) {
+      throw new Error("System enable control is missing from the page");
+    }
 
-    setStatus("ok", "Toggle controls sent");
+    const value = elements.systemEnableToggle.checked ? 1 : 0;
+    await postFeedValue(settings, CONTROL_FEEDS.systemEnable, value);
+    updateSystemEnableDisplay();
+
+    setStatus("ok", `System enable sent: ${value ? "ON" : "OFF"}`);
   } catch (error) {
     setStatus("error", error.message || String(error));
   }
+}
+
+async function sendToggleControls() {
+  await sendSystemEnable();
 }
 
 async function sendSystemReset() {
@@ -767,6 +788,8 @@ elements.saveSettings.addEventListener("click", saveSettings);
 elements.clearSettings.addEventListener("click", clearSettings);
 elements.refreshNow.addEventListener("click", refreshData);
 elements.sendSetpoint.addEventListener("click", sendSetpoint);
+if (elements.systemEnableToggle) elements.systemEnableToggle.addEventListener("change", updateSystemEnableDisplay);
+if (elements.sendSystemEnable) elements.sendSystemEnable.addEventListener("click", sendSystemEnable);
 elements.sendToggleControls.addEventListener("click", sendToggleControls);
 elements.sendTestSettings.addEventListener("click", sendTestSettings);
 elements.sendAllControls.addEventListener("click", sendAllControls);
@@ -787,6 +810,7 @@ if (elements.testDurationSlider && elements.testDurationValue) {
 }
 
 loadSettings();
+updateSystemEnableDisplay();
 setStatus("idle", "Enter feed settings and connect");
 renderSummary([]);
 renderSensorCards([]);
