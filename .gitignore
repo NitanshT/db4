@@ -11,3 +11,7 @@ __pycache__/
 
 # MicroPython / build artifacts
 *.mpy
+
+# Graphs
+light_log.csv
+temp_pwm_log.csv

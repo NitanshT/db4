@@ -567,13 +567,16 @@ def pump_and_measure(pump_seconds, light_log):
         force_outputs_off()
         return False
 
+    print("PUMP DEBUG: ON at", time.time())
     pump.value(1)
     screen("PUMP ON", "{} s".format(pump_seconds))
     if not wait_with_controls(pump_seconds):
         pump.value(0)
+        print("PUMP DEBUG: OFF early at", time.time())
         return False
     pump.value(0)
-
+    print("PUMP DEBUG: OFF at", time.time())
+    
     screen("MEASURING CH0", "{} s".format(CH0_BURST_S))
     light.active(True)
     deadline = utime.ticks_add(utime.ticks_ms(), CH0_BURST_S * 1000)
