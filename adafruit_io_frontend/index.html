@@ -112,7 +112,7 @@
           </p>
         </div>
         <div class="button-row control-top-actions">
-          <button type="button" id="send-toggle-controls" class="secondary">Send toggles</button>
+          <button type="button" id="send-toggle-controls" class="secondary">Send enable state</button>
           <button type="button" id="send-all-controls">Send all controls</button>
         </div>
       </div>
@@ -125,7 +125,25 @@
       </div>
 
       <form id="control-form" class="dashboard-control-grid">
-        <div class="control-row">
+        <div class="control-row test-row">
+          <article class="control-block">
+            <div class="control-block-head">
+              <div>
+                <p class="control-label">System enable</p>
+                <h3><span id="system-enable-display">OFF</span></h3>
+              </div>
+              <span class="feed-pill">system-enable</span>
+            </div>
+
+            <label class="switch-line">
+              <input id="system-enable-toggle" type="checkbox" />
+              <span class="switch-ui"></span>
+              <span class="switch-copy">Software ON/OFF for the ESP32 experiment. OFF forces PWM and pump outputs to zero.</span>
+            </label>
+
+            <button type="button" id="send-system-enable" class="block-button">Send system enable</button>
+          </article>
+
           <article class="control-block primary-block">
             <div class="control-block-head">
               <div>
@@ -219,7 +237,7 @@
       </form>
 
       <p class="control-note">
-        Removed from remote control: <code>peltier-enable</code>, <code>auto-control</code>, and <code>manual-peltier</code>. System shutdown is now handled by <code>system-enable</code>.
+        Remote controls publish to <code>setpoint-temp</code>, <code>system-enable</code>, <code>test-number</code>, <code>test-duration-s</code>, and <code>system-reset</code>. Legacy controls <code>peltier-enable</code>, <code>auto-control</code>, and <code>manual-peltier</code> are not used.
       </p>
     </section>
 
