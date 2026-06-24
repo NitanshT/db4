@@ -1,5 +1,7 @@
 const API_ROOT = "https://io.adafruit.com/api/v2";
 const STORAGE_KEY = "mussels_to_muscles_sensor_dashboard_settings";
+const SNAPSHOT_STORAGE_KEY = "mussels_to_muscles_sensor_dashboard_snapshots";
+const SETTINGS_PANEL_STATE_KEY = "mussels_to_muscles_sensor_dashboard_settings_panel_open";
 
 const SENSOR_DEFINITIONS = [
   {
@@ -13,7 +15,6 @@ const SENSOR_DEFINITIONS = [
     decimals: 2,
     color: "#C48C61",
   },
-
   {
     id: "light",
     label: "Light",
@@ -37,34 +38,45 @@ const SENSOR_DEFINITIONS = [
     color: "#38BDF8",
   },
   {
-    id: "setpoint-active",
+    id: "pwm-duty",
+    label: "PWM Duty Cycle",
+    unit: "%",
+    inputId: "pwm-duty-feed",
+    settingsKey: "pwmDutyFeed",
+    defaultFeed: "pwm-duty",
+    cssClass: "control",
+    decimals: 1,
+    color: "#38BDF8",
+  },
+  {
+    id: "setpoint-temp",
     label: "Setpoint",
     unit: "°C",
-    inputId: "setpoint-active-feed",
-    settingsKey: "setpointActiveFeed",
-    defaultFeed: "setpoint-active",
+    inputId: "setpoint-temp-feed",
+    settingsKey: "setpointTempFeed",
+    defaultFeed: "setpoint-temp",
     cssClass: "control",
     decimals: 1,
     color: "#34D399",
   },
   {
-    id: "relay-state",
-    label: "Relay State",
+    id: "system-enable",
+    label: "System Enable",
     unit: "",
-    inputId: "relay-state-feed",
-    settingsKey: "relayStateFeed",
-    defaultFeed: "relay-state",
+    inputId: "system-enable-feed",
+    settingsKey: "systemEnableFeed",
+    defaultFeed: "system-enable",
     cssClass: "control",
     decimals: 0,
     color: "#FB7185",
   },
   {
-    id: "test-number-active",
+    id: "test-number",
     label: "Test Number",
     unit: "",
-    inputId: "test-number-active-feed",
-    settingsKey: "testNumberActiveFeed",
-    defaultFeed: "test-number-active",
+    inputId: "test-number-feed",
+    settingsKey: "testNumberFeed",
+    defaultFeed: "test-number",
     cssClass: "control",
     decimals: 0,
     color: "#B9C2D0",
@@ -88,13 +100,12 @@ const CONTROL_FEEDS = {
   testNumber: "test-number",
   testDurationS: "test-duration-s",
   systemReset: "system-reset",
-  elapsedTestS: "elapsed-test-s",
 };
 
 const HIDDEN_TREND_SENSOR_IDS = new Set([
-  "setpoint-active",
-  "relay-state",
-  "test-number-active",
+  "setpoint-temp",
+  "system-enable",
+  "test-number",
   "elapsed-test-s",
 ]);
 
@@ -104,11 +115,14 @@ let experimentTimer = null;
 let experimentStartTime = null;
 let experimentElapsedSeconds = 0;
 let experimentDurationSeconds = 0;
+let latestResults = [];
 
 const elements = {
   form: document.getElementById("settings-form"),
   username: document.getElementById("username"),
   aioKey: document.getElementById("aio-key"),
+  settingsToggle: document.getElementById("settings-toggle"),
+  advancedSettings: document.getElementById("advanced-settings-fields"),
   limit: document.getElementById("limit"),
   refreshSeconds: document.getElementById("refresh-seconds"),
   saveSettings: document.getElementById("save-settings"),
@@ -116,6 +130,8 @@ const elements = {
   refreshNow: document.getElementById("refresh-now"),
   status: document.getElementById("connection-status"),
   dot: document.getElementById("connection-dot"),
+  storedExperimentsList: document.getElementById("stored-experiments-list"),
+  storageStatus: document.getElementById("storage-status"),
   activeFeedCount: document.getElementById("active-feed-count"),
   latestUpdate: document.getElementById("latest-update"),
   totalPoints: document.getElementById("total-points"),
@@ -193,6 +209,30 @@ function syncControlPair(rangeElement, numberElement, displayElement, formatDisp
 function updateSystemEnableDisplay() {
   if (!elements.systemEnableToggle || !elements.systemEnableDisplay) return;
   elements.systemEnableDisplay.textContent = elements.systemEnableToggle.checked ? "ON" : "OFF";
+}
+
+function setSettingsPanelExpanded(isExpanded) {
+  if (!elements.settingsToggle || !elements.advancedSettings) return;
+
+  elements.settingsToggle.setAttribute("aria-expanded", String(isExpanded));
+  elements.settingsToggle.querySelector("span")?.replaceChildren(isExpanded ? "Hide extra settings" : "More settings");
+  elements.advancedSettings.hidden = !isExpanded;
+  localStorage.setItem(SETTINGS_PANEL_STATE_KEY, JSON.stringify(isExpanded));
+}
+
+function loadSettingsPanelState() {
+  const raw = localStorage.getItem(SETTINGS_PANEL_STATE_KEY);
+  if (raw === null) {
+    setSettingsPanelExpanded(false);
+    return;
+  }
+
+  try {
+    setSettingsPanelExpanded(Boolean(JSON.parse(raw)));
+  } catch {
+    localStorage.removeItem(SETTINGS_PANEL_STATE_KEY);
+    setSettingsPanelExpanded(false);
+  }
 }
 
 function getSettingsFromForm() {
@@ -333,6 +373,14 @@ function formatDate(date) {
   }).format(date);
 }
 
+function formatSnapshotDate(date) {
+  return new Intl.DateTimeFormat(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
 function formatShortDate(date) {
   return new Intl.DateTimeFormat(undefined, {
     hour: "2-digit",
@@ -354,6 +402,182 @@ function calculateStats(points) {
     max: Math.max(...values),
     avg: values.reduce((sum, value) => sum + value, 0) / values.length,
   };
+}
+
+function getStoredSnapshots() {
+  const raw = localStorage.getItem(SNAPSHOT_STORAGE_KEY);
+
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const snapshots = JSON.parse(raw);
+    return Array.isArray(snapshots) ? snapshots : [];
+  } catch {
+    localStorage.removeItem(SNAPSHOT_STORAGE_KEY);
+    return [];
+  }
+}
+
+function setStoredSnapshots(snapshots) {
+  localStorage.setItem(SNAPSHOT_STORAGE_KEY, JSON.stringify(snapshots));
+  renderStoredSnapshots();
+}
+
+function getLatestSuccessfulResults() {
+  return latestResults.filter((result) => !result.error && result.points.length > 0);
+}
+
+function countLoadedPoints(results = latestResults) {
+  return results.reduce((sum, result) => sum + (result.error ? 0 : result.points.length), 0);
+}
+
+function buildExportRows(results = latestResults) {
+  return results
+    .filter((result) => !result.error && result.points.length > 0)
+    .flatMap((result) => result.points.map((point) => ({
+      sensor: result.sensor.label,
+      feed: result.sensor.feedKey,
+      time: point.createdAt,
+      value: point.value,
+    })));
+}
+
+function renderStoredSnapshots() {
+  if (!elements.storedExperimentsList || !elements.storageStatus) {
+    return;
+  }
+
+  const snapshots = getStoredSnapshots();
+
+  if (!snapshots.length) {
+    elements.storedExperimentsList.innerHTML = "";
+    elements.storageStatus.textContent = "No local experiment snapshots saved yet.";
+    return;
+  }
+
+  const latestSnapshot = snapshots[0];
+  elements.storageStatus.textContent = `Stored experiments · ${latestSnapshot.name} · ${formatSnapshotDate(new Date(latestSnapshot.savedAt))} · ${latestSnapshot.pointCount} data point${latestSnapshot.pointCount === 1 ? "" : "s"}`;
+  elements.storedExperimentsList.innerHTML = snapshots.slice(0, 3).map((snapshot) => `
+    <li class="stored-experiments-item">
+      <span class="stored-experiments-name">${escapeHtml(snapshot.name)}</span>
+      <span class="stored-experiments-meta">${formatSnapshotDate(new Date(snapshot.savedAt))}</span>
+      <span class="stored-experiments-meta">${snapshot.pointCount} data point${snapshot.pointCount === 1 ? "" : "s"}</span>
+      ${snapshot.notes ? `<span class="stored-experiments-notes">${escapeHtml(snapshot.notes)}</span>` : ""}
+    </li>
+  `).join("");
+
+  if (snapshots.length > 3) {
+    const extraCount = snapshots.length - 3;
+    elements.storedExperimentsList.insertAdjacentHTML("beforeend", `
+      <li class="stored-experiments-item stored-experiments-more">+${extraCount} more saved snapshot${extraCount === 1 ? "" : "s"}</li>
+    `);
+  }
+}
+
+function createSnapshotRecord(results = latestResults) {
+  const experimentName = document.getElementById("experiment-name")?.value.trim() || "Untitled experiment";
+  const experimentNotes = document.getElementById("experiment-notes")?.value.trim() || "";
+  const successfulResults = getLatestSuccessfulResults();
+
+  return {
+    id: (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function")
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now()}`,
+    name: experimentName,
+    notes: experimentNotes,
+    savedAt: new Date().toISOString(),
+    pointCount: countLoadedPoints(results),
+    feedCount: successfulResults.length,
+    results: successfulResults.map((result) => ({
+      sensorId: result.sensor.id,
+      label: result.sensor.label,
+      feedKey: result.sensor.feedKey,
+      points: result.points.map((point) => ({
+        value: point.value,
+        createdAt: point.createdAt,
+      })),
+    })),
+  };
+}
+
+function downloadTextFile(filename, content, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  link.click();
+
+  URL.revokeObjectURL(url);
+}
+
+function getExportFileStem() {
+  const value = document.getElementById("experiment-name")?.value.trim();
+  return value ? value.replace(/[^a-z0-9-_]+/gi, "_") : "experiment";
+}
+
+function exportLatestCsv() {
+  const rows = buildExportRows();
+
+  if (!rows.length) {
+    throw new Error("No loaded data is available to export");
+  }
+
+  const header = ["sensor", "feed", "time", "value"];
+  const lines = [header.join(","), ...rows.map((row) => [row.sensor, row.feed, row.time, row.value].map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))];
+  downloadTextFile(`${getExportFileStem()}-latest.csv`, `${lines.join("\n")}\n`, "text/csv;charset=utf-8");
+}
+
+function exportLatestJson() {
+  const rows = buildExportRows();
+
+  if (!rows.length) {
+    throw new Error("No loaded data is available to export");
+  }
+
+  downloadTextFile(
+    `${getExportFileStem()}-latest.json`,
+    JSON.stringify({
+      exportedAt: new Date().toISOString(),
+      experimentName: document.getElementById("experiment-name")?.value.trim() || "",
+      notes: document.getElementById("experiment-notes")?.value.trim() || "",
+      rows,
+    }, null, 2),
+    "application/json;charset=utf-8",
+  );
+}
+
+function exportStoredSnapshots() {
+  const snapshots = getStoredSnapshots();
+
+  if (!snapshots.length) {
+    throw new Error("No stored snapshots available to export");
+  }
+
+  downloadTextFile(
+    `${getExportFileStem()}-stored-snapshots.json`,
+    JSON.stringify({
+      exportedAt: new Date().toISOString(),
+      snapshots,
+    }, null, 2),
+    "application/json;charset=utf-8",
+  );
+}
+
+function saveDataSnapshot() {
+  const snapshot = createSnapshotRecord();
+  const snapshots = [snapshot, ...getStoredSnapshots()];
+  setStoredSnapshots(snapshots);
+  setStatus("ok", `Saved snapshot: ${snapshot.name} · ${formatSnapshotDate(new Date(snapshot.savedAt))} · ${snapshot.pointCount} data points`);
+}
+
+function clearStoredSnapshots() {
+  localStorage.removeItem(SNAPSHOT_STORAGE_KEY);
+  renderStoredSnapshots();
+  setStatus("idle", "Stored experiment snapshots cleared");
 }
 
 function renderSummary(results) {
@@ -518,7 +742,7 @@ function drawChart(canvas, points, sensor) {
 
 async function publishElapsedTestTime(settings, elapsedSeconds) {
   if (!settings || !settings.username || !settings.aioKey) return;
-  await postFeedValue(settings, CONTROL_FEEDS.elapsedTestS, elapsedSeconds);
+  await postFeedValue(settings, "elapsed-test-s", elapsedSeconds);
 }
 
 function updateElapsedTestDisplay() {
@@ -595,7 +819,6 @@ function renderTable(results) {
     </tr>
   `).join("");
 }
-
 
 async function postFeedValue(settings, feedKey, value) {
   const url = new URL(`${API_ROOT}/${encodeURIComponent(settings.username)}/feeds/${encodeURIComponent(feedKey)}/data`);
@@ -731,19 +954,19 @@ async function refreshData() {
 
   setStatus("idle", "Loading feed data...");
 
-  const results = [];
-  for (const sensor of activeSensors) {
+  const results = await Promise.all(activeSensors.map(async (sensor) => {
     try {
-      results.push(await fetchFeedData(latestSettings, sensor));
+      return await fetchFeedData(latestSettings, sensor);
     } catch (error) {
-      results.push({ sensor, points: [], error });
+      return { sensor, points: [], error };
     }
-  }
+  }));
 
   renderSummary(results);
   renderSensorCards(results);
   renderCharts(results);
   renderTable(results);
+  latestResults = results;
 
   const errors = results.filter((result) => result.error).length;
   if (errors > 0) {
@@ -787,6 +1010,46 @@ elements.form.addEventListener("submit", (event) => {
 elements.saveSettings.addEventListener("click", saveSettings);
 elements.clearSettings.addEventListener("click", clearSettings);
 elements.refreshNow.addEventListener("click", refreshData);
+elements.settingsToggle?.addEventListener("click", () => {
+  const isExpanded = elements.settingsToggle.getAttribute("aria-expanded") === "true";
+  setSettingsPanelExpanded(!isExpanded);
+});
+document.getElementById("save-data-snapshot")?.addEventListener("click", () => {
+  try {
+    if (!latestResults.length || countLoadedPoints() === 0) {
+      throw new Error("Load data before saving a snapshot");
+    }
+
+    saveDataSnapshot();
+  } catch (error) {
+    setStatus("error", error.message || String(error));
+  }
+});
+document.getElementById("export-latest-csv")?.addEventListener("click", () => {
+  try {
+    exportLatestCsv();
+    setStatus("ok", "Latest data exported as CSV");
+  } catch (error) {
+    setStatus("error", error.message || String(error));
+  }
+});
+document.getElementById("export-latest-json")?.addEventListener("click", () => {
+  try {
+    exportLatestJson();
+    setStatus("ok", "Latest data exported as JSON");
+  } catch (error) {
+    setStatus("error", error.message || String(error));
+  }
+});
+document.getElementById("export-stored-json")?.addEventListener("click", () => {
+  try {
+    exportStoredSnapshots();
+    setStatus("ok", "Stored snapshots exported as JSON");
+  } catch (error) {
+    setStatus("error", error.message || String(error));
+  }
+});
+document.getElementById("clear-stored-data")?.addEventListener("click", clearStoredSnapshots);
 elements.sendSetpoint.addEventListener("click", sendSetpoint);
 if (elements.systemEnableToggle) elements.systemEnableToggle.addEventListener("change", updateSystemEnableDisplay);
 if (elements.sendSystemEnable) elements.sendSystemEnable.addEventListener("click", sendSystemEnable);
@@ -810,7 +1073,9 @@ if (elements.testDurationSlider && elements.testDurationValue) {
 }
 
 loadSettings();
+loadSettingsPanelState();
 updateSystemEnableDisplay();
+renderStoredSnapshots();
 setStatus("idle", "Enter feed settings and connect");
 renderSummary([]);
 renderSensorCards([]);

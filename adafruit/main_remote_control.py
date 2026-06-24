@@ -223,6 +223,23 @@ def load_runtime_modules():
         BUTTON_AVAILABLE = False
         print("button unavailable:", exc)
 
+    # Free unused large ADC lookup table if present. The current hardware path uses
+    # only THERMISTOR_1_PIN / PIN36_ADC_LOOKUP. Keeping PIN39_ADC_LOOKUP in RAM can
+    # make ESP32 ADC initialisation fail with ESP_ERR_NO_MEM.
+    try:
+        if hasattr(cfg, "PIN39_ADC_LOOKUP"):
+            del cfg.PIN39_ADC_LOOKUP
+            gc.collect()
+            print("freed unused PIN39_ADC_LOOKUP")
+    except Exception as exc:
+        print("could not free PIN39_ADC_LOOKUP:", exc)
+
+    try:
+        import micropython
+        print("mem free after runtime modules:", gc.mem_free())
+    except Exception:
+        pass
+
     print("runtime modules loaded")
 
 
@@ -638,10 +655,20 @@ def maybe_advance_test_window():
 
 def init_hardware():
     global pwm, pump, therm
+    gc.collect()
+    try:
+        print("mem free before hardware init:", gc.mem_free())
+    except Exception:
+        pass
     pwm = PWM(Pin(cfg.MOSFET_PWM), freq=cfg.MOSFET_PWM_FREQ)
     pwm.duty(0)
     pump = Pin(PUMP_PIN, Pin.OUT)
     pump.value(0)
+    gc.collect()
+    try:
+        print("mem free before thermistor ADC:", gc.mem_free())
+    except Exception:
+        pass
     therm = Thermistor(
         pin_no=cfg.THERMISTOR_1_PIN,
         adc_lookup=cfg.PIN36_ADC_LOOKUP,
@@ -779,7 +806,7 @@ def idle_loop():
         if button_pressed():
             set_local_enabled(True, "button start")
             break
-        publish_status(output=0.0)
+        # Do not publish while idle; keep MQTT free to receive dashboard commands.
         if time.time() - last_idle_print >= 5:
             print("idle heartbeat: MQTT listening, system-enable={} setpoint={} test={} elapsed={}s".format(
                 state["system_enabled"],
@@ -827,11 +854,16 @@ def run_session():
 def main():
     wifi_connect()
     load_mqtt_module()
-    mqtt_connect()
+
+    # Load sensor modules and allocate ADC/PWM before opening the MQTT socket.
+    # On ESP32/MicroPython, ADC oneshot allocation can fail with ENOMEM if it is
+    # done after Wi-Fi + MQTT + the large thermistor lookup tables are already live.
     load_runtime_modules()
-    print("skipping initial status publish; dashboard control feeds are subscribe-only")
-    print("initialising hardware...")
+    print("initialising hardware before MQTT socket...")
     init_hardware()
+
+    mqtt_connect()
+    print("skipping initial status publish; dashboard control feeds are subscribe-only")
     print("entering main loop")
 
     while True:

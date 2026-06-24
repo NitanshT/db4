@@ -177,10 +177,49 @@ code {
   margin: 6px 0 0;
 }
 
+.settings-panel .section-title {
+  align-items: center;
+}
+
 .settings-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(220px, 1fr));
   gap: 16px;
+}
+
+.advanced-settings {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: inherit;
+  gap: 16px;
+}
+
+.advanced-settings[hidden] {
+  display: none;
+}
+
+.panel-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  color: var(--text);
+  background: rgba(22, 42, 71, 0.78);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.panel-toggle-arrow {
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-1px);
+  transition: transform 180ms ease;
+}
+
+.panel-toggle[aria-expanded="true"] .panel-toggle-arrow {
+  transform: rotate(-135deg) translateY(-1px);
 }
 
 label {
@@ -215,6 +254,10 @@ input:focus {
   align-items: end;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.settings-grid > .button-row {
+  grid-column: 1 / -1;
 }
 
 button {
@@ -376,6 +419,15 @@ td { color: var(--text); }
 
   .settings-grid { grid-template-columns: 1fr; }
 
+  .advanced-settings {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-toggle {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .logo {
     width: 150px;
     height: 150px;
@@ -426,6 +478,50 @@ td { color: var(--text); }
   color: var(--muted);
   font-size: 0.86rem;
   margin: 14px 0 0;
+}
+
+.stored-experiments {
+  margin-top: 14px;
+}
+
+.stored-experiments-label {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.stored-experiments-list {
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+}
+
+.stored-experiments-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(22, 42, 71, 0.55);
+}
+
+.stored-experiments-name {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.stored-experiments-meta,
+.stored-experiments-notes,
+.stored-experiments-more {
+  color: var(--muted);
+  font-size: 0.88rem;
 }
 
 .sensor-card.control::before {
