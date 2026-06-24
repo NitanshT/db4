@@ -59,6 +59,12 @@ Export all locally stored snapshots as JSON
 Clear locally stored snapshots
 ```
 
+Saved snapshots are shown in a compact "Stored experiments" summary, for example:
+
+```text
+Stored experiments · mussels-test-1 · 24 Jun 2026 · 120 data points
+```
+
 Data is stored in browser `localStorage`, so it remains local to that browser/machine. CSV and JSON exports are standard downloadable files.
 
 ## Usage

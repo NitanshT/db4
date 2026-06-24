@@ -428,6 +428,50 @@ td { color: var(--text); }
   margin: 14px 0 0;
 }
 
+.stored-experiments {
+  margin-top: 14px;
+}
+
+.stored-experiments-label {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.stored-experiments-list {
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+}
+
+.stored-experiments-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(22, 42, 71, 0.55);
+}
+
+.stored-experiments-name {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.stored-experiments-meta,
+.stored-experiments-notes,
+.stored-experiments-more {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
 .sensor-card.control::before {
   background:
     radial-gradient(circle at top right, rgba(52, 211, 153, 0.20), transparent 17rem),
